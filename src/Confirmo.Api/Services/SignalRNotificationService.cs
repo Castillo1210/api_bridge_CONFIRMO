@@ -1,5 +1,6 @@
 using Confirmo.Api.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using Confirmo.Api.Models.DTOs;
 
 namespace Confirmo.Api.Services;
 
@@ -28,6 +29,12 @@ public class SignalRNotificationService : ISignalRNotificationService
 
     public Task NotifyQualityRejected(Guid userId, Guid depositId, List<string> issues)
         => SendAsync(userId, "QualityRejected", new { depositId, issues, timestamp = DateTimeOffset.UtcNow });
+
+    public Task SendChatMessage(Guid userId, ChatMessageResponse message)
+    => _hub.Clients.User(userId.ToString()).SendAsync("ChatMessage", message);
+
+public Task SendDirectMessage(Guid userId, string message, Guid? depositId = null)
+    => _hub.Clients.User(userId.ToString()).SendAsync("DirectMessage", new { message, depositId, timestamp = DateTimeOffset.UtcNow });
 
     private Task SendAsync(Guid userId, string method, object payload)
     {
