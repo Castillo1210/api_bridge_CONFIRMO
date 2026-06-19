@@ -62,6 +62,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
 builder.Services.AddHttpClient<IPythonWorkerClient, PythonWorkerClient>();
 builder.Services.AddScoped<ISignalRNotificationService, SignalRNotificationService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 
 // SignalR
 builder.Services.AddSignalR(o => o.EnableDetailedErrors = builder.Configuration.GetValue<bool>("SignalR:EnableDetailedErrors"));
@@ -91,6 +92,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapDepositEndpoints();
 app.MapInternalEndpoints();
+app.MapChatEndpoints();
 
 // SignalR Hub
 app.MapHub<DepositHub>("/hubs/deposits");

@@ -1,4 +1,6 @@
 using Confirmo.Api.Data;
+using Confirmo.Api.Models.DTOs;
+using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -54,6 +56,69 @@ public static class InternalEndpoints
             logger.LogInformation("Depósito {DepositId} actualizado a {Estado}", deposit.Id, payload.Estado);
             return Results.Ok();
         });
+
+        group.MapPost("/webhooks/deposits/batch", async (
+            [FromBody] BatchDepositsRequest request,
+            HttpContext http,
+            AppDbContext context,
+            IStorageService storage,
+            IPythonWorkerClient worker,
+            ISignalRNotificationService notifications,
+            ILogger<Program> logger
+        ) =>
+        {
+            var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null) return Results.Unauthorized();
+
+            var results = new List<object>();
+
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var item in request.Items)
+                {
+                    byte[] imageBytes = Convert.FromBase64String(item.ImagenBase64);
+                    var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
+
+                    var deposit = new Deposito
+                    {
+                        Id = Guid.NewGuid(),
+                        NumeroOperacion = item.NumeroOperacion,
+                        Cliente = item.Cliente,
+                        Monto = item.Monto,
+                        Moneda = item.Moneda,
+                        FechaDeposito = item.FechaDeposito,
+                        BancoId = Guid.TryParse(item.BancoId, out var bId) ? bId : null,
+                        Anexo = item.Anexo,
+                        ReferenciaCliente = item.ReferenciaCliente,
+                        RucCliente = item.RucCliente,
+                        ImagenVoucher = objectName,
+                        EmpresaId = user.EmpresaId,
+                        SucursalId = user.SucursalId,
+                        VendedorId = userId,
+                        Estado = "recibido",
+                        FechaRegistro = DateTimeOffset.UtcNow
+                    };
+
+                    context.Depositos.Add(deposit);
+                    await context.SaveChangesAsync();
+                    await worker.EnqueueProcessAsync(deposit.Id.ToString());
+                    await notifications.NotifyDepositReceived(userId, deposit.Id);
+
+                    results.Add(new { depositId = deposit.Id, estado = "recibido", numeroOperacion = item.NumeroOperacion });
+                }
+
+                await transaction.CommitAsync();
+                return Results.Ok(new { items = results });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Error en batch deposits");
+                return Results.BadRequest(new { error = "Error procesando lote", detail = ex.Message });
+            }
+        });
     }
 }
 
@@ -71,3 +136,6 @@ public record ProcessedDepositCallback(
     string? ReferenceNumber,
     List<string>? QualityIssues
 );
+
+public record DirectMessageRequest(Guid UserId, string Message, Guid? DepositId);
+public record BatchDepositsRequest(List<DepositCreateRequest> Items);

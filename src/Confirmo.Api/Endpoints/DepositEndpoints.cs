@@ -85,6 +85,9 @@ public static class DepositEndpoints
         group.MapGet("/", async (
             HttpContext http,
             AppDbContext context,
+            [FromQuery] string? cliente,
+            [FromQuery] decimal? montoMin,
+            [FromQuery] decimal? montoMax,
             [FromQuery] string? estado,
             [FromQuery] DateTimeOffset? desde,
             [FromQuery] DateTimeOffset? hasta,
@@ -94,6 +97,19 @@ public static class DepositEndpoints
             var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
             var query = context.Depositos.AsNoTracking().Where(d => d.VendedorId == userId);
+
+            if (!string.IsNullOrEmpty(cliente))
+            {
+                query = query.Where(d => d.Cliente != null && EF.Functions.ILike(d.Cliente, $"%{cliente}"));
+            }
+            if (montoMin.HasValue)
+            {
+                query = query.Where(d => d.Monto >= montoMin.Value);
+            }
+            if (montoMax.HasValue)
+            {
+                query = query.Where(d => d.Monto <= montoMax.Value);
+            }
 
             if (!string.IsNullOrEmpty(estado)) query = query.Where(d => d.Estado == estado);
             if (desde.HasValue) query = query.Where(d => d.FechaRegistro >= desde.Value);
