@@ -60,9 +60,15 @@ builder.Services.AddAuthorization();
 // Servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
-builder.Services.AddHttpClient<IPythonWorkerClient, PythonWorkerClient>();
+builder.Services.AddHttpClient<IPythonWorkerClient, PythonWorkerClient>(c => c.BaseAddress = new Uri(builder.Configuration["PythonWorker:BaseUrl"]!));
 builder.Services.AddScoped<ISignalRNotificationService, SignalRNotificationService>();
 builder.Services.AddScoped<IChatService, ChatService>();
+
+builder.Services.AddSingleton<IRedisQueueService, RedisQueueService>();
+
+builder.Services.AddScoped<IVoucherBusinessErrorRepository, VoucherBusinessErrorRepository>();
+
+builder.Services.AddHostedService<WorkerResultConsumer>();
 
 // SignalR
 builder.Services.AddSignalR(o => o.EnableDetailedErrors = builder.Configuration.GetValue<bool>("SignalR:EnableDetailedErrors"));

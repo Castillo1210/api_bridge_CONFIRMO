@@ -31,6 +31,26 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.HasIndex(d => new { d.Estado, d.FechaRegistro }).HasDatabaseName("idx_depositos_estado_fecha");
         builder.HasIndex(d => new { d.EmpresaId, d.Estado }).HasDatabaseName("idx_depositos_empresa_estado");
         builder.HasIndex(d => d.NumeroOperacionBanco).IsUnique().HasDatabaseName("uk_depositos_numero_operacion_banco").HasFilter("numero_operacion_banco IS NOT NULL");
+
+        // En DepositoConfiguration.Configure() - AGREGAR al final:
+
+        // Campos para integración Worker
+        builder.Property(d => d.ErrorIds)
+            .HasColumnType("uuid[]")
+            .HasDefaultValueSql("'{}'::uuid[]");
+
+        builder.Property(d => d.WarningIds)
+            .HasColumnType("uuid[]")
+            .HasDefaultValueSql("'{}'::uuid[]");
+
+        // Índices para consultas frecuentes
+        builder.HasIndex(d => d.ErrorIds)
+            .HasDatabaseName("idx_depositos_error_ids")
+            .HasMethod("gin");  // GIN index para array UUID
+
+        builder.HasIndex(d => d.WarningIds)
+            .HasDatabaseName("idx_depositos_warning_ids")
+            .HasMethod("gin");
     }
 }
 

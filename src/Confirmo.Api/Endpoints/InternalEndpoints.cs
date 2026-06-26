@@ -2,6 +2,7 @@ using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
+using Google.Api;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -118,6 +119,41 @@ public static class InternalEndpoints
                 logger.LogError(ex, "Error en batch deposits");
                 return Results.BadRequest(new { error = "Error procesando lote", detail = ex.Message });
             }
+        });
+
+        group.MapPost("/webhooks/worker-result", async (
+            [FromBody] WorkerResult payload,
+            HttpContext http,
+            AppDbContext context,
+            ISignalRNotificationService notifications,
+            IVoucherBusinessErrorRepository errorRepo,
+            ILogger<Program> logger
+        ) =>
+        {
+            if (!http.Request.Headers.TryGetValue("X-Internal-Secret", out var secret) || secret != app.Configuration["InternalSecret"])
+            {
+                return Results.Unauthorized();
+            }
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == Guid.Parse(payload.DepositId));
+            if (deposit == null) return Results.NotFound();
+
+            // Actualizar BD con resultado
+            deposit.Estado = payload.Status;
+            
+
+            if (payload.ErrorIds?.Count > 0)
+            {
+                deposit.ErrorIds = payload.ErrorIds.Select(Guid.Parse).ToArray();
+            }
+            if (payload.WarningIds?.Count > 0)
+            {
+                deposit.WarningIds = payload.WarningIds.Select(Guid.Parse).ToArray();
+            }
+
+            await context.SaveChangesAsync();
+
+            return Results.Ok();
         });
     }
 }

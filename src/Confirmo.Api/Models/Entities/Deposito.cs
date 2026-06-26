@@ -28,6 +28,8 @@ public class Deposito
     public string? RucCliente { get; set; }
     public bool? EsAntiguo { get; set; }
     public DateOnly? FechaSoloDate { get; set; }
+    public Guid[] ErrorIds { get; set; } = Array.Empty<Guid>();
+    public Guid[] WarningIds { get; set; } = Array.Empty<Guid>();
 }
 
 public class Banco

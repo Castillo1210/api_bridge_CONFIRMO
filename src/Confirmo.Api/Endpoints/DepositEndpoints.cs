@@ -22,6 +22,7 @@ public static class DepositEndpoints
             AppDbContext context,
             IStorageService storage,
             IPythonWorkerClient worker,
+            IRedisQueueService redisQueue,
             ISignalRNotificationService notifications,
             ILogger<Program> logger) =>
         {
@@ -29,15 +30,11 @@ public static class DepositEndpoints
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null) return Results.Unauthorized();
 
-            if (request.Moneda != "PEN" && request.Moneda != "USD")
-            {
-                return Results.BadRequest(new { error = "Moneda debe ser PEN o USD" });
-            }
-
             byte[] imageBytes;
             try { imageBytes = Convert.FromBase64String(request.ImagenBase64); }
             catch { return Results.BadRequest(new { error = "ImagenBase64 inválida" }); }
 
+            // 1. Subir a GCS
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  "image/jpeg");
 
             var deposit = new Deposito
@@ -45,13 +42,8 @@ public static class DepositEndpoints
                 Id = Guid.NewGuid(),
                 NumeroOperacion = request.NumeroOperacion,
                 Cliente = request.Cliente,
-                Monto = request.Monto,
-                Moneda = request.Moneda,
-                FechaDeposito = request.FechaDeposito,
                 BancoId = Guid.TryParse(request.BancoId, out var bId) ? bId : null,
                 Anexo = request.Anexo,
-                ReferenciaCliente = request.ReferenciaCliente,
-                RucCliente = request.RucCliente,
                 ImagenVoucher = objectName,
                 EmpresaId = user.EmpresaId,
                 SucursalId = user.SucursalId,
@@ -63,13 +55,18 @@ public static class DepositEndpoints
             context.Depositos.Add(deposit);
             await context.SaveChangesAsync();
 
-            await worker.EnqueueProcessAsync(deposit.Id.ToString());
+            // 3. Publicar en Redis Queue para procesamiento asíncrono
+            await redisQueue.PublishAsync("deposit:process:queue", new
+            {
+                deposit_id = deposit.Id.ToString(),
+                object_name = objectName,
+                banco_id = request.BancoId,
+                empresa_id = user.EmpresaId.ToString(),
+                cliente = request.Cliente,
+                retry_count = 0
+            });
 
-            await notifications.NotifyDepositReceived(userId, deposit.Id);
-
-            logger.LogInformation("Depósito creado: {DepositId} por user {UserId}", deposit.Id, userId);
-
-            return Results.Accepted($"/api/v1/deposits/{deposit.Id}", new { depositId = deposit.Id, estado = "recibido" });
+            return Results.Ok();
         })
         .DisableAntiforgery()
         .Accepts<DepositCreateRequest>("multipart/form-data");

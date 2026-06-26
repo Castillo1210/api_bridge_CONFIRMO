@@ -1,3 +1,4 @@
+using Confirmo.Api.Data.Configurations;
 using Confirmo.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,10 +14,12 @@ public class AppDbContext : DbContext
     public DbSet<Sucursal> Sucursales => Set<Sucursal>();
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<DepositMessage> DepositMessages => Set<DepositMessage>();
+    public DbSet<VoucherBusinessError> VoucherBusinessErrors => Set<VoucherBusinessError>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(new VoucherBusinessErrorConfiguration());
         base.OnModelCreating(modelBuilder);
     }
 }

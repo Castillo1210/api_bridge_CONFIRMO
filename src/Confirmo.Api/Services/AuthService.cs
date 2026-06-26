@@ -24,6 +24,32 @@ public class AuthService : IAuthService
         _logger = logger;
     }
 
+    public async Task<ChangePasswordResponse> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
+    {
+        var user = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == userId && p.Activo);
+        if (user == null) return new ChangePasswordResponse(false, "Usuario no encontrado");
+
+        if (!VerifyPassword(currentPassword, user.PasswordHash))
+        {
+            return new ChangePasswordResponse(false, "Contraseña actual incorrecta");
+        }
+
+        if (currentPassword == newPassword)
+        {
+            return new ChangePasswordResponse(false, "La nueva contraseña debe ser diferente a la actual");
+        }
+
+        if (newPassword.Length < 8)
+        {
+            return new ChangePasswordResponse(false, "La contraseña debe tener al menos 8 caracteres");
+        }
+
+        user.PasswordHash = HashPassword(newPassword);
+        await _context.SaveChangesAsync();
+
+        return new ChangePasswordResponse(true, "Contraseña actualizado correctamente");
+    }
+
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
         var user = await _context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.PhoneNumber == request.PhoneNumber && p.Activo);

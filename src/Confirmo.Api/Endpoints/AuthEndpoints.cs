@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Services;
 
@@ -19,6 +20,13 @@ public static class AuthEndpoints
         {
             var result = await auth.RefreshAsync(request.RefreshToken);
             return result is not null ? Results.Ok(result) : Results.Unauthorized();
+        });
+
+        group.MapPost("/change-password", async (ChangePasswordRequest request, HttpContext http, IAuthService auth) =>
+        {
+            var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var result = await auth.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
+            return result.Success ? Results.Ok(result) : Results.BadRequest(result);
         });
     }
 }

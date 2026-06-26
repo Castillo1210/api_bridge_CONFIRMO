@@ -9,3 +9,7 @@ public record UserInfo(Guid Id, string PhoneNumber, string FullName, Guid Empres
 public record RefreshRequest(string RefreshToken);
 
 public record RefreshResponse(string AccessToken, int ExpiresInSeconds);
+
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+public record ChangePasswordResponse(bool Success, string Message);

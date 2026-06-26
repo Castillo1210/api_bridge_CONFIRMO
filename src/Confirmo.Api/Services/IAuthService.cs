@@ -13,4 +13,5 @@ public interface IAuthService
     string HashPassword(string password);
     bool VerifyPassword(string password, string hash);
     ClaimsPrincipal? ValidateToken(string token);
+    Task<ChangePasswordResponse> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
 }
