@@ -60,6 +60,7 @@ builder.Services.AddAuthorization();
 // Servicios
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
+// HttpClient para Python Worker
 builder.Services.AddHttpClient<IPythonWorkerClient, PythonWorkerClient>(c => c.BaseAddress = new Uri(builder.Configuration["PythonWorker:BaseUrl"]!));
 builder.Services.AddScoped<ISignalRNotificationService, SignalRNotificationService>();
 builder.Services.AddScoped<IChatService, ChatService>();
@@ -70,14 +71,31 @@ builder.Services.AddScoped<IVoucherBusinessErrorRepository, VoucherBusinessError
 
 builder.Services.AddHostedService<WorkerResultConsumer>();
 
-// SignalR
-builder.Services.AddSignalR(o => o.EnableDetailedErrors = builder.Configuration.GetValue<bool>("SignalR:EnableDetailedErrors"));
+builder.Services.AddFCMNotifications(builder.Configuration);
 
-// HttpClient para Python Worker
-builder.Services.AddHttpClient<IPythonWorkerClient, PythonWorkerClient>(c => 
-    c.BaseAddress = new Uri(builder.Configuration["PythonWorker:BaseUrl"]!));
+// SignalR con Redis Backplane
+var signalRBuilder = builder.Services.AddSignalR(o =>
+{
+    o.EnableDetailedErrors = builder.Configuration.GetValue<bool>("SignalR:EnableDetailedErrors");
+    o.MaximumReceiveMessageSize = 64 * 1024;
+    o.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+});
 
-// Controllers/Endpoints
+var redisBackplaneConnStr = builder.Configuration["SignalR:Redis:ConnectionString"] ?? builder.Configuration["Redis:ConnectionString"];
+
+if (!string.IsNullOrEmpty(redisBackplaneConnStr))
+{
+    var channelPrefix = builder.Configuration["SignalR:Redis:ChannelPrefix"] ?? "ConfirmoSignalR";
+    signalRBuilder.AddStackExchangeRedis(redisBackplaneConnStr, o =>
+    {
+        o.Configuration.ChannelPrefix = channelPrefix;
+        o.Configuration.ConnectTimeout = 5000;
+        o.Configuration.ConnectRetry = 3;
+    });
+}
+
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

@@ -16,7 +16,7 @@ public class Deposito
     public string? Observaciones { get; set; }
     public string? MotivoRechazo { get; set; }
     public DateTimeOffset? FechaValidacion { get; set; }
-    public Guid EmpresaId { get; set; }
+    public Guid? EmpresaId { get; set; }
     public Guid? BancoId { get; set; }
     public Guid? SucursalId { get; set; }
     public Guid VendedorId { get; set; }
@@ -30,6 +30,12 @@ public class Deposito
     public DateOnly? FechaSoloDate { get; set; }
     public Guid[] ErrorIds { get; set; } = Array.Empty<Guid>();
     public Guid[] WarningIds { get; set; } = Array.Empty<Guid>();
+
+    // Navigation
+    public Empresa? Empresa { get; set; }
+    public Sucursal? Sucursal { get; set; }
+    public Banco? Banco { get; set; }
+    public Profile? Vendedor { get; set; }
 }
 
 public class Banco

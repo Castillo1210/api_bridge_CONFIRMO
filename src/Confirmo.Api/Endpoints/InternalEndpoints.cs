@@ -1,3 +1,4 @@
+using System.Globalization;
 using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
@@ -18,18 +19,24 @@ public static class InternalEndpoints
             [FromBody] ProcessedDepositCallback payload,
             AppDbContext context,
             ISignalRNotificationService notifications,
+            IFCMNotificationService fcm,
             ILogger<Program> logger
         ) =>
         {
-            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == payload.DepositId);
+            var deposit = await context.Depositos
+                .Include(d => d.Empresa)
+                .Include(d => d.Sucursal)
+                .Include(d => d.Banco)
+                .FirstOrDefaultAsync(d => d.Id == payload.DepositId);
+            
             if (deposit == null) return Results.NotFound();
 
+            var oldStatus = deposit.Estado;
             deposit.Estado = payload.Estado;
             deposit.FechaValidacion = payload.Estado == "confirmado" ? DateTimeOffset.UtcNow : null;
             deposit.MotivoRechazo = payload.MotivoRechazo;
             deposit.DatosOcr = payload.DatosOcr;
-            deposit.NumeroOperacionBanco = payload.NumeroOperacionBanco;
-
+            
             if (payload.Estado == "confirmado")
             {
                 deposit.Monto = payload.Monto;
@@ -37,27 +44,53 @@ public static class InternalEndpoints
                 deposit.FechaDeposito = payload.FechaDeposito;
                 deposit.BancoId = payload.BancoId;
                 deposit.ReferenciaCliente = payload.ReferenciaCliente;
+                deposit.NumeroOperacion = payload.NumeroOperacion ?? "";
             }
 
             await context.SaveChangesAsync();
 
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, payload.Estado, oldStatus);
+
             switch (payload.Estado)
             {
                 case "confirmado":
-                    await notifications.NotifyDepositConfirmed(deposit.VendedorId, deposit.Id, payload.DatosOcr!, payload.ReferenceNumber!);
+                    var notif = new DepositConfirmedNotification(
+                        DepositId: deposit.Id,
+                        Estado: "confirmado",
+                        ReferenceNumber: payload.ReferenceNumber ?? deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion ?? "",
+                        Empresa: deposit.Empresa?.Nombre ?? "",
+                        Sucursal: deposit.Sucursal?.Nombre ?? "",
+                        Banco: deposit.Banco?.Nombre ?? "",
+                        Anexo: deposit.Anexo ?? "",
+                        FechaDeposito: deposit.FechaDeposito ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                        NumeroOperacion: deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion ?? "",
+                        Importe: deposit.Monto.ToString(CultureInfo.InvariantCulture),
+                        Moneda: deposit.Moneda
+                        );
+                    await notifications.NotifyDepositConfirmed(deposit.VendedorId, deposit.Id, notif);
+                    await SendFcmToVendedor(context, fcm, deposit.VendedorId, notif, logger);
                     break;
+                /*case "requiere_revision":
+                    await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
+                        "Tu depósito requiere revisión manual. Te notificaremos cuando esté listo.");
+                    break;*/
                 case "rechazado":
-                    await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, payload.MotivoRechazo!);
+                    await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, payload.MotivoRechazo ?? "Tu depósito ha sido rechazado.");
                     break;
                 case "calidad_rechazado":
-                    await notifications.NotifyQualityRejected(deposit.VendedorId, deposit.Id, payload.QualityIssues!);
+                    await notifications.NotifyQualityRejected(deposit.VendedorId, deposit.Id, payload.QualityIssues ?? new List<string>());
                     break;
+                /*case "error_ia":
+                    await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
+                        "Recibimos tu depósito. Está en proceso de validación automática. Te notificaremos cuando termine.");
+                    break;*/
             }
 
             logger.LogInformation("Depósito {DepositId} actualizado a {Estado}", deposit.Id, payload.Estado);
             return Results.Ok();
         });
-
+        
+        // WebHook: batch de depósitos
         group.MapPost("/webhooks/deposits/batch", async (
             [FromBody] BatchDepositsRequest request,
             HttpContext http,
@@ -85,17 +118,10 @@ public static class InternalEndpoints
                     var deposit = new Deposito
                     {
                         Id = Guid.NewGuid(),
-                        NumeroOperacion = item.NumeroOperacion,
                         Cliente = item.Cliente,
-                        Monto = item.Monto,
-                        Moneda = item.Moneda,
-                        FechaDeposito = item.FechaDeposito,
                         BancoId = Guid.TryParse(item.BancoId, out var bId) ? bId : null,
-                        Anexo = item.Anexo,
-                        ReferenciaCliente = item.ReferenciaCliente,
-                        RucCliente = item.RucCliente,
                         ImagenVoucher = objectName,
-                        EmpresaId = user.EmpresaId,
+                        EmpresaId = Guid.TryParse(item.BancoId, out var eId) ? eId : null,
                         SucursalId = user.SucursalId,
                         VendedorId = userId,
                         Estado = "recibido",
@@ -107,7 +133,7 @@ public static class InternalEndpoints
                     await worker.EnqueueProcessAsync(deposit.Id.ToString());
                     await notifications.NotifyDepositReceived(userId, deposit.Id);
 
-                    results.Add(new { depositId = deposit.Id, estado = "recibido", numeroOperacion = item.NumeroOperacion });
+                    results.Add(new { depositId = deposit.Id, estado = "recibido" });
                 }
 
                 await transaction.CommitAsync();
@@ -120,13 +146,15 @@ public static class InternalEndpoints
                 return Results.BadRequest(new { error = "Error procesando lote", detail = ex.Message });
             }
         });
-
-        group.MapPost("/webhooks/worker-result", async (
+        
+        // Webhook: resultado del Worker Python
+        group.MapPost("/webhooks/worker-result", async(
             [FromBody] WorkerResult payload,
             HttpContext http,
             AppDbContext context,
             ISignalRNotificationService notifications,
             IVoucherBusinessErrorRepository errorRepo,
+            IFCMNotificationService fcm,
             ILogger<Program> logger
         ) =>
         {
@@ -135,12 +163,16 @@ public static class InternalEndpoints
                 return Results.Unauthorized();
             }
 
-            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == Guid.Parse(payload.DepositId));
+            var deposit = await context.Depositos
+                .Include(d => d.Empresa)
+                .Include(d => d.Sucursal)
+                .Include(d => d.Banco)
+                .FirstOrDefaultAsync(d => d.Id == Guid.Parse(payload.DepositId));
             if (deposit == null) return Results.NotFound();
 
             // Actualizar BD con resultado
-            deposit.Estado = payload.Status;
-            
+            var oldStatus = deposit.Estado;
+            deposit.Estado = MapWorkerStatusToDbStatus(payload.Status);
 
             if (payload.ErrorIds?.Count > 0)
             {
@@ -152,10 +184,81 @@ public static class InternalEndpoints
             }
 
             await context.SaveChangesAsync();
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, payload.Status, oldStatus);
 
+            switch (payload.Status)
+            {
+                case "validado":
+                    var notif = new DepositConfirmedNotification(
+                        DepositId: deposit.Id,
+                        Estado: "validado",
+                        ReferenceNumber: deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion,
+                        Empresa: deposit.Empresa?.Nombre ?? "",
+                        Sucursal: deposit.Sucursal?.Nombre ?? "",
+                        Banco: deposit.Banco?.Nombre ?? "",
+                        Anexo: deposit.Anexo ?? "",
+                        FechaDeposito: deposit.FechaDeposito ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                        NumeroOperacion: deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion ?? "",
+                        Importe: deposit.Monto.ToString(CultureInfo.InvariantCulture),
+                        Moneda: deposit.Moneda
+                    );
+                    await notifications.NotifyDepositConfirmed(deposit.VendedorId, deposit.Id, notif);
+                    await SendFcmToVendedor(context, fcm, deposit.VendedorId, notif, logger);
+                    break;
+                case "requiere_revision":
+                    if (payload.WarningIds?.Count > 0)
+                    {
+                        var warnings = await errorRepo.GetByIdsAsync(payload.WarningIds);
+                        await notifications.NotifyRequiresReview(deposit.VendedorId, deposit.Id, warnings);
+                    }
+                    break;
+                case "rechazado":
+                    if (payload.ErrorIds?.Count > 0)
+                    {
+                        var errors = await errorRepo.GetByIdsAsync(payload.ErrorIds);
+                        await notifications.NotifyValidationErrors(deposit.VendedorId, deposit.Id, errors);
+                    }
+                    break;
+                case "error_ia":
+                    await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
+                        "Recibimos tu depósito. Está en proceso de validación automática. Te notificaremos cuando termine.");
+                    break;
+                default:
+                    await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
+                        "Hubo un problema procesando tu depósito. Nuestro equipo lo revisará.");
+                    break;
+            }
+            
+            logger.LogInformation("Worker-result procesado: depósito {DepositId} -> {Status}", deposit.Id, payload.Status);
             return Results.Ok();
         });
     }
+
+    private static async Task SendFcmToVendedor(AppDbContext context, IFCMNotificationService fcm, Guid vendedorId,
+        DepositConfirmedNotification notification, ILogger logger)
+    {
+        try
+        {
+            var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == vendedorId);
+
+            if (vendedor?.FcmToken != null)
+            {
+                await fcm.SendDepositConfirmedAsync(vendedor.FcmToken, notification);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error enviando FCM para depósito {DepositId}", notification.DepositId);
+        }
+    }
+    
+    // Mapea el status del Worker Python al estado de BD
+    private static string MapWorkerStatusToDbStatus(string workerStatus) => workerStatus switch
+    {
+        "error_id" => "recibido",
+        "error" => "rechazado",
+        _ => workerStatus
+    };
 }
 
 public record ProcessedDepositCallback(
@@ -163,7 +266,7 @@ public record ProcessedDepositCallback(
     string Estado, // confirmado | rechazado | calidad_rechazado
     object? DatosOcr,
     string? MotivoRechazo,
-    string? NumeroOperacionBanco,
+    string? NumeroOperacion,
     decimal Monto,
     string Moneda,
     DateOnly? FechaDeposito,

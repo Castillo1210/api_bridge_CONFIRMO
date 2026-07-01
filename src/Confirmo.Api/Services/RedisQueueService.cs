@@ -20,7 +20,7 @@ public class RedisQueueService : IRedisQueueService
         var db = _redis.GetDatabase();
         var json = JsonSerializer.Serialize(message);
         await db.StreamAddAsync(stream, new NameValueEntry[] { new("data", json) });
-        _logger.LogDebug("Publicando en {Stream}", stream);
+        _logger.LogDebug("Publicado en {Stream}", stream);
     }
 
     public async Task<StreamEntry[]> ReadAsync(string stream, string consumerGroup, string consumerName, int count = 10, int blockMs = 5000)

@@ -1,17 +1,17 @@
 namespace Confirmo.Api.Models.DTOs;
 
 public record DepositCreateRequest(
-    string NumeroOperacion,
     string? Cliente,
-    decimal Monto,
-    string Moneda,
-    DateOnly? FechaDeposito,
+    string? EmpresaId,
     string? BancoId,
-    string? Cuenta,
-    string? Anexo,
+    string ImagenBase64
+);
+
+public record RegularizeDepositRequest(
     string ImagenBase64,
-    string? ReferenciaCliente,
-    string? RucCliente
+    string? Cliente,
+    string? BancoId,
+    string? EmpresaId
 );
 
 public record DepositResponse(
@@ -29,7 +29,7 @@ public record DepositResponse(
     string? Observaciones,
     string? MotivoRechazo,
     DateTimeOffset? FechaValidacion,
-    Guid EmpresaId,
+    Guid? EmpresaId,
     Guid? BancoId,
     Guid? SucursalId,
     Guid VendedorId,
