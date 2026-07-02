@@ -18,8 +18,9 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.Property(d => d.Moneda).IsRequired().HasMaxLength(3);
         builder.Property(d => d.FechaRegistro).HasDefaultValueSql("now()");
         builder.Property(d => d.ImagenVoucher).HasMaxLength(100);
-        builder.Property(d => d.Estado).IsRequired().HasMaxLength(20).HasDefaultValue("pendiente");
+        builder.Property(d => d.Estado).IsRequired().HasMaxLength(20).HasDefaultValue("recibido");
         builder.Property(d => d.Observaciones).HasMaxLength(1000);
+        builder.Property(d => d.Condicion).HasMaxLength(100);
         builder.Property(d => d.MotivoRechazo).HasMaxLength(500);
         builder.Property(d => d.ReferenciaCliente).HasMaxLength(100);
         builder.Property(d => d.DatosOcr).HasColumnType("jsonb");
@@ -30,7 +31,6 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.HasIndex(d => new { d.VendedorId, d.FechaRegistro }).HasDatabaseName("idx_depositos_vendedor_fecha");
         builder.HasIndex(d => new { d.Estado, d.FechaRegistro }).HasDatabaseName("idx_depositos_estado_fecha");
         builder.HasIndex(d => new { d.EmpresaId, d.Estado }).HasDatabaseName("idx_depositos_empresa_estado");
-        builder.HasIndex(d => d.NumeroOperacionBanco).IsUnique().HasDatabaseName("uk_depositos_numero_operacion_banco").HasFilter("numero_operacion_banco IS NOT NULL");
 
         // En DepositoConfiguration.Configure() - AGREGAR al final:
 
@@ -72,6 +72,7 @@ public class EmpresaConfiguration : IEntityTypeConfiguration<Empresa>
         builder.ToTable("empresas", "public");
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Nombre).IsRequired().HasMaxLength(200);
+        builder.Property(e => e.Logo).HasMaxLength(500);
         builder.Property(e => e.Ruc).HasMaxLength(20);
     }
 }

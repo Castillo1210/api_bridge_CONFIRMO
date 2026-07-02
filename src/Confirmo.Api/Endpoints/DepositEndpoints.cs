@@ -3,7 +3,6 @@ using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +16,7 @@ public static class DepositEndpoints
             .RequireAuthorization()
             .WithTags("Deposits");
         
+        // POST: Crear depósito único
         group.MapPost("/", async (
             [FromForm] DepositCreateRequest request,
             HttpContext http,
@@ -26,13 +26,12 @@ public static class DepositEndpoints
             ISignalRNotificationService notifications,
             ILogger<Program> logger) =>
         {
-            var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var userId = GetUserId(http);
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null) return Results.Unauthorized();
 
-            byte[] imageBytes;
-            try { imageBytes = Convert.FromBase64String(request.ImagenBase64); }
-            catch { return Results.BadRequest(new { error = "ImagenBase64 inválida" }); }
+            var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
+            if (error != null) return Results.BadRequest(new { error }); 
 
             // 1. Subir a GCS
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  "image/jpeg");
@@ -46,7 +45,7 @@ public static class DepositEndpoints
                 EmpresaId = Guid.TryParse(request.EmpresaId, out var eId) ? eId : null,
                 SucursalId = user.SucursalId,
                 VendedorId = userId,
-                Estado = "recibido",
+                Estado = DepositStates.Recibido,
                 FechaRegistro = DateTimeOffset.UtcNow
             };
 
@@ -54,38 +53,89 @@ public static class DepositEndpoints
             await context.SaveChangesAsync();
 
             // 3. Publicar en Redis Queue para procesamiento asíncrono
-            await redisQueue.PublishAsync("deposit:process:queue", new
-            {
-                deposit_id = deposit.Id.ToString(),
-                object_name = objectName,
-                banco_id = request.BancoId,
-                empresa_id = request.EmpresaId,
-                cliente = request.Cliente,
-                retry_count = 0
-            });
+            await EnqueueToRedis(redisQueue, deposit.Id, objectName, request.BancoId);
+            await NotifyNewDeposit(notifications, userId, deposit, user.FullName);
 
-            await notifications.NotifyDepositReceived(userId, deposit.Id);
-            await notifications.NotifyPanelNewDeposit(new PanelDepositSummary(
-                DepositId: deposit.Id,
-                NumeroOperacion: deposit.NumeroOperacion,
-                Cliente: deposit.Cliente,
-                Monto: deposit.Monto,
-                Moneda: deposit.Moneda,
-                Estado: deposit.Estado,
-                FechaRegistro: deposit.FechaRegistro,
-                Banco: null,
-                Sucursal: null,
-                VendedorNombre: user.FullName
-            ));
-
-            return Results.Ok(new { depositId = deposit.Id });
+            return Results.Ok(new { depositId = deposit.Id, estado = deposit.Estado });
         })
         .DisableAntiforgery()
         .Accepts<DepositCreateRequest>("multipart/form-data");
+        
+        // Post: crear VARIOS depósitos (batch)
+        group.MapPost("/batch", async (
+            [FromBody] BatchDepositsRequest request,
+            HttpContext http,
+            AppDbContext context,
+            IStorageService storage,
+            IPythonWorkerClient worker,
+            IRedisQueueService redisQueue,
+            ISignalRNotificationService notifications,
+            ILogger<Program> logger
+        ) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null) return Results.Unauthorized();
 
+            if (request.Items.Count == 0)
+                return Results.BadRequest(new { error = "La lista de vouchers no puede estar vacía " });
+    
+            var results = new List<object>();
+
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var item in request.Items)
+                {
+                    var (imageBytes, error) = ValidateAndDecodeImage(item.ImagenBase64);
+                    if (error != null)
+                    {
+                        results.Add(new { index = results.Count, error });
+                        continue;
+                    }
+                    
+                    var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
+
+                    var deposit = new Deposito
+                    {
+                        Id = Guid.NewGuid(),
+                        Cliente = item.Cliente,
+                        BancoId = Guid.TryParse(item.BancoId, out var bId) ? bId : null,
+                        ImagenVoucher = objectName,
+                        EmpresaId = Guid.TryParse(item.BancoId, out var eId) ? eId : null,
+                        SucursalId = user.SucursalId,
+                        VendedorId = userId,
+                        Estado = DepositStates.Recibido,
+                        FechaRegistro = DateTimeOffset.UtcNow
+                    };
+
+                    context.Depositos.Add(deposit);
+                    await context.SaveChangesAsync();
+
+                    await EnqueueToRedis(redisQueue, deposit.Id, objectName, item.BancoId);
+                    await NotifyNewDeposit(notifications, userId, deposit, user.FullName);
+
+                    results.Add(new { depositId = deposit.Id, estado = deposit.Estado });
+                }
+
+                await transaction.CommitAsync();
+                return Results.Ok(new { items = results });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Error en batch deposits");
+                return Results.BadRequest(new { error = "Error procesando lote", detail = ex.Message });
+            }
+        })
+        .RequireAuthorization()
+        .WithSummary("Crear múltiples depósitos en lote")
+        .WithDescription("Recibe una lista de vouchers, los sube a GCS, los registra en BD y los encola para procesamiento.");
+        
+        // GET: un depósito
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context) =>
         {
-            var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var userId = GetUserId(http);
             var deposit = await context.Depositos.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && d.VendedorId == userId);
 
             return deposit is not null ? Results.Ok(MapToResponse(deposit)) : Results.NotFound();
@@ -104,7 +154,7 @@ public static class DepositEndpoints
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20) =>
         {
-            var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var userId = GetUserId(http);
 
             var query = context.Depositos.AsNoTracking().Where(d => d.VendedorId == userId);
 
@@ -135,7 +185,8 @@ public static class DepositEndpoints
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
-
+        
+        // GET: bancos
         group.MapGet("/bancos", async (AppDbContext context) =>
         {
             var bancos = await context.Bancos
@@ -147,6 +198,17 @@ public static class DepositEndpoints
             return Results.Ok(bancos);
         });
         
+        // GET: empresas
+        group.MapGet("/empresas", async (AppDbContext context) =>
+        {
+            var empresas = await context.Empresas
+                .AsNoTracking()
+                .Where(e => e.Activo)
+                .Select(e => new EmpresaResponse(e.Id, e.Nombre, e.Logo))
+                .ToListAsync();
+            return Results.Ok(empresas);
+        });
+        
         // POST: Confirmar depósito (finanzas/admin)
         group.MapPost("/{id:guid}/confirm", async (
             Guid id,
@@ -155,11 +217,9 @@ public static class DepositEndpoints
             AppDbContext context,
             ISignalRNotificationService notifications,
             IFCMNotificationService fcm,
-            ILogger<Program> logger) =>
-        {
-            var userIdClaim = http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
-                return Results.Unauthorized();
+            ILogger<Program> logger) => 
+        { 
+            var userId = GetUserId(http); 
 
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
@@ -173,16 +233,16 @@ public static class DepositEndpoints
 
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
 
-            if (deposit.Estado != "validado" && deposit.Estado != "requiere_revision")
+            if (deposit.Estado != DepositStates.Procesado)
             {
                 return Results.BadRequest(new { 
-                    error = "Solo se pueden confirmar depósitos en estado 'validado' o 'requiere_revision'",
+                    error = $"Solo se pueden confirmar depósitos en estado '{DepositStates.Procesado}'",
                     estadoActual = deposit.Estado
                 });
             }
 
             var oldStatus = deposit.Estado;
-            deposit.Estado = "confirmado";
+            deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
             deposit.ValidadoPor = userId;
             if (request?.Observaciones != null)
@@ -192,7 +252,7 @@ public static class DepositEndpoints
 
             var notification = new DepositConfirmedNotification(
                 DepositId: deposit.Id,
-                Estado: "confirmado",
+                Estado: DepositStates.Confirmado,
                 ReferenceNumber: deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion,
                 Empresa: deposit.Empresa?.Nombre ?? "",
                 Sucursal: deposit.Sucursal?.Nombre ?? "",
@@ -205,7 +265,7 @@ public static class DepositEndpoints
             );
 
             await notifications.NotifyDepositConfirmed(deposit.VendedorId, deposit.Id, notification);
-            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, "confirmado", oldStatus);
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Confirmado, oldStatus);
 
             var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
             if (vendedor?.FcmToken != null)
@@ -241,48 +301,39 @@ public static class DepositEndpoints
             ILogger<Program> logger
         ) =>
         {
-            var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+            var userId = GetUserId(http);
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null)
                 return Results.Unauthorized();
             
-            var deposit = await context.Depositos
-                .Include(d => d.Empresa)
-                .Include(d => d.Sucursal)
-                .Include(d => d.Banco)
-                .FirstOrDefaultAsync(d => d.Id == id);
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
 
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
 
-            if (deposit.Estado != "rechazado")
+            if (deposit.Estado != DepositStates.Rechazado)
             {
                 return Results.BadRequest(new
                 {
-                    error = "Solo se pueden regularizar depósitos en estado 'rechazado'",
+                    error = $"Solo se pueden regularizar depósitos en estado '{DepositStates.Rechazado}'",
                     estadoActual = deposit.Estado
                 });
             }
 
-            byte[] imageBytes;
-            try
-            {
-                imageBytes = Convert.FromBase64String(request.ImagenBase64);
-            }
-            catch
+            var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
+            
+            if (error != null)
             {
                 return Results.BadRequest(new { error = "ImagenBase64 inválida" });
-            }
-
-            if (imageBytes.Length < 1024)
-            {
-                return Results.BadRequest(new { error = "La imagen es demasiado pequeña. Debe ser al menos 1KB." });
             }
 
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
 
             var oldStatus = deposit.Estado;
             deposit.ImagenVoucher = objectName;
-            deposit.Estado = "recibido";
+            deposit.Cliente = request.Cliente;
+            deposit.Estado = DepositStates.Recibido;
+            deposit.BancoId = Guid.TryParse(request.BancoId, out var bId) ? bId : null;
+            deposit.EmpresaId = Guid.TryParse(request.EmpresaId, out var eId) ? eId : null;
             deposit.MotivoRechazo = null;
             deposit.FechaValidacion = null;
             deposit.ErrorIds = Array.Empty<Guid>();
@@ -290,25 +341,17 @@ public static class DepositEndpoints
 
             await context.SaveChangesAsync();
 
-            await redisQueue.PublishAsync("deposit:process:queue", new
-            {
-                deposit_id = deposit.Id.ToString(),
-                object_name = objectName,
-                banco_id = deposit.BancoId?.ToString(),
-                empresa_id = deposit.EmpresaId?.ToString(),
-                cliente = deposit.Cliente,
-                retry_count = 0
-            });
+            await EnqueueToRedis(redisQueue, deposit.Id, objectName, deposit.BancoId?.ToString());
 
             await notifications.NotifyDepositReceived(userId, deposit.Id);
-            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, "recibido", oldStatus);
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Recibido, oldStatus);
             
             logger.LogInformation("Depósito {DepositId} regularizado por usuario {UserId}", deposit.Id, userId);
 
             return Results.Ok(new
             {
                 depositId = deposit.Id,
-                estado = "recibido",
+                estado = DepositStates.Recibido,
                 message = "Depósito regularizado. Será procesado nuevamente."
             });
         })
@@ -317,7 +360,57 @@ public static class DepositEndpoints
         .WithSummary("Regularizar un depósito rechazado")
         .WithDescription("Permite al vendedor re-subir la imagen de un depósito rechazado para re-procesarlo.");
     }
+    
+    // Helpers privados
+    private static Guid GetUserId(HttpContext http)
+        => Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
+    private static (byte[]? bytes, string? error) ValidateAndDecodeImage(string base64)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(base64);
+            if (bytes.Length < 1024)
+            {
+                return (null, "La imagen es demasiado pequeña. Debe ser al menos 1KB");
+            }
+
+            return (bytes, null);
+        }
+        catch
+        {
+            return (null, "ImagenBase64 inválida");
+        }
+    }
+
+    private static async Task EnqueueToRedis(IRedisQueueService redisQueue, Guid depositId, string objectName, string? bancoId)
+    {
+        await redisQueue.PublishAsync("deposit:process:queue", new
+        {
+            deposit_id = depositId.ToString(),
+            object_name = objectName,
+            banco_id = bancoId,
+            retry_count = 0
+        });
+    }
+
+    private static async Task NotifyNewDeposit(ISignalRNotificationService notifications, Guid userId, Deposito deposit, string vendedorNombre)
+    {
+        await notifications.NotifyDepositReceived(userId, deposit.Id);
+        await notifications.NotifyPanelNewDeposit(new PanelDepositSummary(
+            DepositId: deposit.Id,
+            NumeroOperacion: deposit.NumeroOperacion,
+            Cliente: deposit.Cliente,
+            Monto: 0,
+            Moneda: "",
+            Estado: deposit.Estado,
+            FechaRegistro: deposit.FechaRegistro,
+            Banco: null,
+            Sucursal: null,
+            VendedorNombre: vendedorNombre
+        ));
+    }
+    
     private static DepositResponse MapToResponse(Deposito d) => new(
         d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
         d.ImagenVoucher, d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
@@ -326,3 +419,5 @@ public static class DepositEndpoints
         d.ReferenciaCliente, d.DatosOcr, d.RucCliente
     );
 }
+
+public record BatchDepositsRequest(List<DepositCreateRequest> Items);

@@ -62,3 +62,9 @@ public record BancoResponse(
     string Nombre,
     string? Codigo
 );
+
+public record EmpresaResponse(
+    Guid Id,
+    string Nombre,
+    string? Logo
+);

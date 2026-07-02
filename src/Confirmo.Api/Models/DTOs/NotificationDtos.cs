@@ -89,3 +89,11 @@ public record SystemAlert(
     string Message,
     DateTimeOffset Timestamp
 );
+
+public record BusinessRuleResult(
+    bool IsRejected,
+    string? Condition,
+    bool Risk,
+    string? RejectionReason,
+    string? UserMessage
+);

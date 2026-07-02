@@ -23,9 +23,6 @@ public class SignalRNotificationService : ISignalRNotificationService
     public Task NotifyDepositReceived(Guid userId, Guid depositId)
         => SendToUser(userId, "DepositReceived", new { depositId, timestamp = DateTimeOffset.UtcNow });
 
-    public Task NotifyDepositProcessing(Guid userId, Guid depositId, int progress)
-        => SendToUser(userId, "DepositProcessing", new { depositId, progress, timestamp = DateTimeOffset.UtcNow });
-
     public Task NotifyDepositProcessing(Guid userId, Guid depositId, string message)
         => SendToUser(userId, "DepositProcessingUpdateStatusUpdate", new { status = "processing", message, timestamp = DateTimeOffset.UtcNow });
 
@@ -39,6 +36,11 @@ public class SignalRNotificationService : ISignalRNotificationService
 
     public Task NotifyDepositRejected(Guid userId, Guid depositId, string reason)
         => SendToUser(userId, "DepositRejected", new { depositId, reason, timestamp = DateTimeOffset.UtcNow });
+
+    public Task NotifyDepositRejectedWithDetails(Guid userId, Guid depositId, string reason)
+        => SendToUser(userId, "DepositRejected", new {
+            depositId, reason, timestamp = DateTimeOffset.UtcNow
+        });
 
     public Task NotifyQualityRejected(Guid userId, Guid depositId, List<string> issues)
         => SendToUser(userId, "QualityRejected", new { depositId, issues, timestamp = DateTimeOffset.UtcNow });

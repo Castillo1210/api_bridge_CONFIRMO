@@ -12,7 +12,7 @@ public class Deposito
     public string? Anexo { get; set; }
     public string? NumeroOperacionBanco { get; set; }
     public DateOnly? FechaDeposito { get; set; }
-    public string Estado { get; set; } = "pendiente";
+    public string Estado { get; set; } = "recibido";
     public string? Observaciones { get; set; }
     public string? MotivoRechazo { get; set; }
     public DateTimeOffset? FechaValidacion { get; set; }
@@ -25,6 +25,8 @@ public class Deposito
     public string? ReferenciaCliente { get; set; }
     public object? DatosOcr { get; set; }
     public string? TelefonoOrigen { get; set; }
+    public string? Condicion { get; set; }
+    public bool Riesgo { get; set; }
     public string? RucCliente { get; set; }
     public bool? EsAntiguo { get; set; }
     public DateOnly? FechaSoloDate { get; set; }
@@ -51,6 +53,7 @@ public class Empresa
     public Guid Id { get; set; }
     public string Nombre { get; set; } = string.Empty;
     public string? Ruc { get; set; }
+    public string? Logo { get; set; }
     public bool Activo { get; set; } = true;
 }
 
@@ -76,4 +79,17 @@ public class Profile
     public string? FcmToken { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
+}
+
+public static class DepositStates
+{
+    public const string Recibido = "recibido";
+    public const string Procesado = "procesado";
+    public const string Rechazado = "rechazado";
+    public const string Confirmado = "confirmado";
+
+    public static readonly string[] All = { Recibido, Procesado, Rechazado, Confirmado };
+    public static readonly string[] CanReject = { Recibido, Rechazado };
+    public static readonly string[] CanConfirm = { Procesado };
+    public static readonly string[] CanRegularize = { Rechazado };
 }

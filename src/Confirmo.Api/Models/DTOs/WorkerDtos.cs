@@ -3,8 +3,6 @@ namespace Confirmo.Api.Models.DTOs;
 public record WorkerResult(
     string DepositId,
     string Status,
-    List<string> ErrorIds,
-    List<string> WarningIds,
     string? ErrorType,
     string? ErrorMessage
 );
