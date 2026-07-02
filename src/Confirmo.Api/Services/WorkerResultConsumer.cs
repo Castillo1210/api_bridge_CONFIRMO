@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;

@@ -3,7 +3,6 @@ using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
-using Google.Api;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 

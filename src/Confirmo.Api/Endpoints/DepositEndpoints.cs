@@ -67,7 +67,6 @@ public static class DepositEndpoints
             HttpContext http,
             AppDbContext context,
             IStorageService storage,
-            IPythonWorkerClient worker,
             IRedisQueueService redisQueue,
             ISignalRNotificationService notifications,
             ILogger<Program> logger
@@ -102,7 +101,7 @@ public static class DepositEndpoints
                         Cliente = item.Cliente,
                         BancoId = Guid.TryParse(item.BancoId, out var bId) ? bId : null,
                         ImagenVoucher = objectName,
-                        EmpresaId = Guid.TryParse(item.BancoId, out var eId) ? eId : null,
+                        EmpresaId = Guid.TryParse(item.EmpresaId, out var eId) ? eId : null,
                         SucursalId = user.SucursalId,
                         VendedorId = userId,
                         Estado = DepositStates.Recibido,

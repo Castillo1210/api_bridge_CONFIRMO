@@ -2,71 +2,11 @@
 version: '3.8'
 
 services:
-  api-bridge:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: api-bridge
-    ports:
-      - "8080:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
-      
-      # Database (Cloud SQL via proxy o IP privada)
-      - Database__Host=${DB_HOST:-/cloudsql/PROJECT:REGION:INSTANCE}
-      - Database__Port=5432
-      - Database__Name=${DB_NAME:-confirmo}
-      - Database__User=${DB_USER}
-      - Database__Password=${DB_PASSWORD}
-      
-      # JWT
-      - Jwt__Secret=${JWT_SECRET}
-      - Jwt__AccessTokenHours=8
-      - Jwt__RefreshTokenDays=30
-      - Jwt__Issuer=confirmo-api
-      - Jwt__Audience=confirmo-app
-      
-      # GCP Storage
-      - Gcp__StorageBucket=${GCS_BUCKET}
-      
-      # Python Worker
-      - PythonWorker__BaseUrl=http://python-worker:8081
-      
-      # Redis
-      - Redis__ConnectionString=redis:6379
-      
-      # Finance Webhook
-      - FinanceWebhook__Url=${FINANCE_WEBHOOK_URL}
-      - FinanceWebhook__Secret=${FINANCE_WEBHOOK_SECRET}
-      
-      # Internal Secret (Worker â†” API Bridge)
-      - InternalSecret=${INTERNAL_SECRET}
-      
-      # SignalR
-      - SignalR__EnableDetailedErrors=true
-      
-      # GCP Project
-      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
-      
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - confirmo-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
+  # ==== INFRAESTRUCTURA COMPARTIDA ====
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --notify-keyspace-events KEA
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events KEA
     ports:
       - "6379:6379"
     volumes:
@@ -78,15 +18,145 @@ services:
       retries: 5
     networks:
       - confirmo-network
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.2'
+          memory: 512M
+          cpus: '0.5'
+
+  cloudsql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.0
+    command:
+    - "--port=5432"
+    - "--credentials-file=/secrets/sa-key.json"
+    - "${GCP_PROJECT_ID}:${GCP_REGION}:confirmo-db"
+    volumes:
+    - ./secrets/sa-key.json:/secrets/sa-key.json:ro
+    networks:
+    - confirmo-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+# ==== API BRIDGE (.NET) ====
+  api-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-bridge
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # Base de datos vía Cloud SQL Proxy
+      - Database__Host=cloudsql-proxy
+      - Database__Port=5432
+      - Database__Name=${DB_NAME:-confirmo}
+      - Database__User=${DB_USER}
+      - Database__Password=${DB_PASSWORD}
+      # JWT
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=confirmo-api
+      - Jwt__Audience=confirmo-app
+      # GCP Cloud Storage
+      - Gcp__StorageBucket=${GCS_BUCKET}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa-key.json
+      # Python Worker
+      - PythonWorker__BaseUrl=http://python-worker:8081
+      # Redis (Streams + SignalR Backplane)
+      - Redis__ConnectionString=redis:6379
+      - SignalR__Redis__ConnectionString=redis:6379
+      - SignalR__Redis__ChannelPrefix=ConfirmoSignalR
+      - SignalR__EnableDetailedErrors=true
+      # Webhooks externos
+      - FinanceWebhook__Url=${FINANCE_WEBHOOK_URL}
+      - FinanceWebhook__Secret=${FINANCE_WEBHOOK_SECRET}
+      # Interno
+      - InternalSecret=${INTERNAL_SECRET}
+      # Firebase FCM
+      - Firebase__ProjectId=${FIREBASE_PROJECT_ID}
+    volumes:
+        - ./secrets/sa-key.json:/secrets/sa-key.json:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      cloudsql-proxy:
+        condition: service_started
+    networks:
+      - confirmo-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+            memory: 512M
+            cpus: '0.5'
+
+# ==== PYTHON WORKER ====
+  python-worker:
+    build:
+      context: ../api-worker/python-worker
+      dockerfile: Dockerfile
+    container_name: python-worker
+    ports:
+      - "8081:8081"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      # Base de datos via Cloud SQL Proxy
+      - DATABASE_HOST=cloudsql-proxy
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=${DB_NAME:-confirmo}
+      - DATABASE_USER=${DB_USER}
+      - DATABASE_PASSWORD=${DB_PASSWORD}
+      # GCS
+      - GCS_BUCKET=${GCS_BUCKET}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa-key.json
+      # IA LlamaParser
+      - LLAMA_PARSER_URL=${LLAMA_PARSER_URL}
+      - LLAMA_PARSER_API_KEY=${LLAMA_PARSER_API_KEY}
+      # API Bridge
+      - API_BRIDGE_URL=http://api-bridge:8080
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
+      # Redis / Celery
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    volumes:
+      - ./secrets/sa-key.json:/secrets/sa-key.json:ro
+      - ./secrets/firebase-sa.json:/secrets/firebase-sa.json:ro
+      - worker-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      cloudsql-proxy:
+        condition: service_started
+      api-bridge:
+        condition: service_started
+    networks:
+      - confirmo-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+            memory: 256M
+            cpus: '0.2'
 
 networks:
   confirmo-network:
     driver: bridge
 
 volumes:
-  redis-data:
+    redis-data:
+    worker-logs:
