@@ -1,4 +1,3 @@
-# D:\api-bridge\docker-compose.yml
 version: '3.8'
 
 services:
@@ -53,7 +52,6 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
-      # Base de datos vía Cloud SQL Proxy
       - Database__Host=cloudsql-proxy
       - Database__Port=5432
       - Database__Name=${DB_NAME:-confirmo}
@@ -111,7 +109,6 @@ services:
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
-      # Base de datos via Cloud SQL Proxy
       - DATABASE_HOST=cloudsql-proxy
       - DATABASE_PORT=5432
       - DATABASE_NAME=${DB_NAME:-confirmo}
