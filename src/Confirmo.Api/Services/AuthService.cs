@@ -103,7 +103,7 @@ public class AuthService : IAuthService
 
         var token = new JwtSecurityToken(
             issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audiencie"],
+            audience: _config["Jwt:Audience"],
             claims: claims,
             expires: DateTime.UtcNow.AddHours(_config.GetValue<int>("Jwt:AccessTokenHours")),
             signingCredentials: creds
@@ -124,7 +124,7 @@ public class AuthService : IAuthService
     public ClaimsPrincipal? ValidateToken(string token)
     {
         var handler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_config["Jwt:Secrets"]!);
+        var key = Encoding.UTF8.GetBytes(_config["Jwt:Secret"]!);
 
         try
         {
