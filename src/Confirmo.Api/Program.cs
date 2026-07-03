@@ -30,7 +30,8 @@ builder.Services.AddDbContext<AppDbContext>(o =>
     o.UseNpgsql(connStr, npgsql => npgsql.MigrationsHistoryTable("__ef_migrations", "public")));
 
 // Auth
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret requerido");
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+var jwtSecret = string.IsNullOrEmpty(jwtOptions.Secret) ? (builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret requerido")) : jwtOptions.Secret;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
@@ -40,8 +41,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ClockSkew = TimeSpan.Zero
         };
