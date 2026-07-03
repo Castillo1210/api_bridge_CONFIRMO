@@ -24,9 +24,25 @@ public static class AuthEndpoints
 
         group.MapPost("/change-password", async (ChangePasswordRequest request, HttpContext http, IAuthService auth) =>
         {
-            var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            // 1. Buscamos el claim usando el estándar abreviado "sub" o el largo de Microsoft
+            var userIdClaim = http.User.FindFirst("sub") 
+                            ?? http.User.FindFirst(ClaimTypes.NameIdentifier);
+
+            // 2. Si no lo encuentra, evitamos el crash devolviendo un 401 limpio
+            if (userIdClaim == null || string.IsNullOrEmpty(userIdClaim.Value))
+            {
+                return Results.Json(new { message = "No se encontró el identificador del usuario en el token (sub/NameIdentifier)" }, statusCode: 401);
+            }        
+
+            // 3. Parseamos de forma segura el Guid
+            if (!Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return Results.Json(new { message = "El identificador del usuario no tiene un formato Guid válido" }, statusCode: 400);
+            }
+
+            //var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             var result = await auth.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
             return result.Success ? Results.Ok(result) : Results.BadRequest(result);
-        });
+        }).RequireAuthorization();
     }
 }
