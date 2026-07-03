@@ -34,6 +34,10 @@ public class AuthService : IAuthService
         _logger.LogInformation("Password recibida de Postman: '{CurrentPassword}' (Largo: {Length})", currentPassword, currentPassword?.Length);
         _logger.LogInformation("Hash leído de la Base de Datos: '{PasswordHash}' (Largo: {HashLength})", user.PasswordHash, user.PasswordHash?.Length);
 
+        bool esValido = VerifyPassword(currentPassword, user.PasswordHash);
+
+        _logger.LogInformation("El Password es correcto: {EsValido}", esValido);
+
         if (!VerifyPassword(currentPassword, user.PasswordHash))
         {
             return new ChangePasswordResponse(false, "Contraseña actual incorrecta");
@@ -63,6 +67,13 @@ public class AuthService : IAuthService
         {
             _logger.LogWarning("Login fallido para número: {PhoneNumber}", request.PhoneNumber);
             return null;
+        }
+
+        // 2. 🚨 ¡LA LÍNEA FALTANTE! Validamos la contraseña contra el Hash real
+        if (!VerifyPassword(request.Password, user.PasswordHash))
+        {
+            _logger.LogWarning("Contraseña incorrecta para número: {PhoneNumber}", request.PhoneNumber);
+            return null; // Si no coincide, rechaza el login de inmediato
         }
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
