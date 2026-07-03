@@ -56,7 +56,7 @@ public class AuthService : IAuthService
 
         if (user == null)
         {
-            _logger.LogWarning("Login fallido0 para número: {PhoneNumber}", request.PhoneNumber);
+            _logger.LogWarning("Login fallido para número: {PhoneNumber}", request.PhoneNumber);
             return null;
         }
 

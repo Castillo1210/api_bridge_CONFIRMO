@@ -9,6 +9,7 @@ using Microsoft.OpenApi.Models;
 using Confirmo.Api.Endpoints;
 using Serilog;
 using System.Text;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -89,7 +90,7 @@ if (!string.IsNullOrEmpty(redisBackplaneConnStr))
     var channelPrefix = builder.Configuration["SignalR:Redis:ChannelPrefix"] ?? "ConfirmoSignalR";
     signalRBuilder.AddStackExchangeRedis(redisBackplaneConnStr, o =>
     {
-        o.Configuration.ChannelPrefix = channelPrefix;
+        o.Configuration.ChannelPrefix = RedisChannel.Literal(channelPrefix);
         o.Configuration.ConnectTimeout = 5000;
         o.Configuration.ConnectRetry = 3;
     });
