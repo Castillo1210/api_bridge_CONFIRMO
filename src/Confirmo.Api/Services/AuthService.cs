@@ -29,6 +29,11 @@ public class AuthService : IAuthService
         var user = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == userId && p.Activo);
         if (user == null) return new ChangePasswordResponse(false, "Usuario no encontrado");
 
+        // 🔍 LOGS DE DIAGNÓSTICO (Añade estas líneas)
+        _logger.LogInformation("--- DIAGNÓSTICO DE CONTRASEÑA ---");
+        _logger.LogInformation("Password recibida de Postman: '{CurrentPassword}' (Largo: {Length})", currentPassword, currentPassword?.Length);
+        _logger.LogInformation("Hash leído de la Base de Datos: '{PasswordHash}' (Largo: {HashLength})", user.PasswordHash, user.PasswordHash?.Length);
+
         if (!VerifyPassword(currentPassword, user.PasswordHash))
         {
             return new ChangePasswordResponse(false, "Contraseña actual incorrecta");
