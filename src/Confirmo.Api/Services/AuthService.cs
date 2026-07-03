@@ -66,6 +66,10 @@ public class AuthService : IAuthService
         }
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
+        _context.Entry(user).Property(x => x.LastLoginAt).IsModified = true;
+
+        _context.Entry(user).Property(x => x.PasswordHash).IsModified = false;
+
         await _context.SaveChangesAsync();
 
         var accessToken = GenerateAccessToken(user);
