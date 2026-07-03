@@ -102,8 +102,8 @@ public class AuthService : IAuthService
         };
 
         var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
+            issuer: _config["Jwt:Issuer"] ?? "confirmo-api",
+            audience: _config["Jwt:Audience"] ?? "confirmo-app",
             claims: claims,
             expires: DateTime.UtcNow.AddHours(_config.GetValue<int>("Jwt:AccessTokenHours")),
             signingCredentials: creds
@@ -134,8 +134,8 @@ public class AuthService : IAuthService
                 ValidateAudience = true,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
-                ValidIssuer = _config["Jwt:Issuer"],
-                ValidAudience = _config["Jwt:Audience"],
+                ValidIssuer = _config["Jwt:Issuer"] ?? "confirmo-api",
+                ValidAudience = _config["Jwt:Audience"] ?? "confirmo-app",
                 IssuerSigningKey = new SymmetricSecurityKey(key),
                 ClockSkew = TimeSpan.Zero
             }, out _);
