@@ -27,6 +27,7 @@ services:
   cloudsql-proxy:
     image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.0
     command:
+    - "--address=0.0.0.0"
     - "--port=5432"
     - "--credentials-file=/secrets/sa-key.json"
     - "${GCP_PROJECT_ID}:${GCP_REGION}:confirmo-db"
