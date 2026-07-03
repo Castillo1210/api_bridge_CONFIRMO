@@ -52,7 +52,7 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var user = await _context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.PhoneNumber == request.PhoneNumber && p.Activo);
+        var user = await _context.Profiles.FirstOrDefaultAsync(p => p.PhoneNumber == request.PhoneNumber && p.Activo);
 
         if (user == null)
         {
