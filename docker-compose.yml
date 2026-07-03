@@ -30,7 +30,7 @@ services:
     - "--address=0.0.0.0"
     - "--port=5432"
     - "--credentials-file=/secrets/sa-key.json"
-    - "${GCP_PROJECT_ID}:${GCP_REGION}:confirmo-db"
+    - "${GCP_PROJECT_ID}:${GCP_REGION}:free-trial-first-project"
     volumes:
     - ./secrets/sa-key.json:/secrets/sa-key.json:ro
     networks:
