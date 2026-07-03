@@ -38,6 +38,7 @@ public class WorkerResultConsumer : BackgroundService
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var errorRepo = scope.ServiceProvider.GetRequiredService<IVoucherBusinessErrorRepository>();
                 var fcm = scope.ServiceProvider.GetRequiredService<IFCMNotificationService>();
+                var chat = scope.ServiceProvider.GetRequiredService<IChatService>();
 
                 var entries = await _queue.ReadAsync("deposit:result:queue", "api-bridge", "consumer-1", 10, 5000);
 
@@ -64,7 +65,7 @@ public class WorkerResultConsumer : BackgroundService
                         }
                         
                         // Procesar resultado
-                        await HandleResult(result, notifications, db, errorRepo, fcm);
+                        await HandleResult(result, notifications, db, errorRepo, fcm, chat);
                         await _queue.AckAsync("deposit:result:queue", "api-bridge", entry.Id);
                     }
                     catch (Exception ex)
@@ -81,7 +82,7 @@ public class WorkerResultConsumer : BackgroundService
         }
     }
 
-    private async Task HandleResult(WorkerResult result, ISignalRNotificationService notifications, AppDbContext db, IVoucherBusinessErrorRepository errorRepo, IFCMNotificationService fcm)
+    private async Task HandleResult(WorkerResult result, ISignalRNotificationService notifications, AppDbContext db, IVoucherBusinessErrorRepository errorRepo, IFCMNotificationService fcm, IChatService chat)
     {
         var deposit = await db.Depositos
             .Include(d => d.Empresa)
@@ -115,6 +116,8 @@ public class WorkerResultConsumer : BackgroundService
                 deposit.Estado = DepositStates.Rechazado;
                 deposit.MotivoRechazo = ruleResult.RejectionReason;
                 await db.SaveChangesAsync();
+                
+                await chat.AddSystemMessageAsync(deposit.Id, $"Depósito rechazado: {ruleResult.UserMessage}");
 
                 await notifications.NotifyDepositRejectedWithDetails(deposit.VendedorId, deposit.Id, ruleResult.UserMessage!);
 

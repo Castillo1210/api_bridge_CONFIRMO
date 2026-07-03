@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using Confirmo.Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Confirmo.Api.Hubs;
 
@@ -8,13 +10,15 @@ namespace Confirmo.Api.Hubs;
 public class DepositHub : Hub
 {
     private readonly ILogger<DepositHub> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
     
     // Track de conexiones activas por userId (para detectar duplicados/múltiples dispositivos)
     private static readonly ConcurrentDictionary<string, HashSet<string>> _userConnections = new();
 
-    public DepositHub(ILogger<DepositHub> logger)
+    public DepositHub(ILogger<DepositHub> logger, IServiceScopeFactory scopeFactory)
     {
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
     
     public override async Task OnConnectedAsync()
@@ -77,7 +81,7 @@ public class DepositHub : Hub
                 timestamp = DateTimeOffset.UtcNow
             });
         }
-        catch (Exception ex)
+        catch
         {
             await Clients.Caller.SendAsync("Error", new
             {
@@ -224,8 +228,18 @@ public class DepositHub : Hub
             });
             return;
         }
-        
-        _logger.LogInformation("FCM token registrado para el usuario");
+
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Profiles.FirstOrDefaultAsync(p => p.Id == Guid.Parse(userId));
+
+        if (user != null)
+        {
+            user.FcmToken = fcmToken;
+            await db.SaveChangesAsync();
+            _logger.LogInformation("FCM token persistido en BD para usuario {UserId}", userId);
+        }
+
         await Clients.Caller.SendAsync("FcmTokenRegistered", new
         {
             success = true,

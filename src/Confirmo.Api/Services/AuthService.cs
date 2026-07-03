@@ -29,11 +29,6 @@ public class AuthService : IAuthService
         var user = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == userId && p.Activo);
         if (user == null) return new ChangePasswordResponse(false, "Usuario no encontrado");
 
-        // 🔍 LOGS DE DIAGNÓSTICO (Añade estas líneas)
-        _logger.LogInformation("--- DIAGNÓSTICO DE CONTRASEÑA ---");
-        _logger.LogInformation("Password recibida de Postman: '{CurrentPassword}' (Largo: {Length})", currentPassword, currentPassword?.Length);
-        _logger.LogInformation("Hash leído de la Base de Datos: '{PasswordHash}' (Largo: {HashLength})", user.PasswordHash, user.PasswordHash?.Length);
-
         bool esValido = VerifyPassword(currentPassword, user.PasswordHash);
 
         _logger.LogInformation("El Password es correcto: {EsValido}", esValido);
@@ -79,6 +74,12 @@ public class AuthService : IAuthService
             return null; // Si no coincide, rechaza el login de inmediato
         }
 
+        if (!string.IsNullOrEmpty(request.FcmToken) && request.FcmToken != user.FcmToken)
+        {
+            user.FcmToken = request.FcmToken;
+            _context.Entry(user).Property(x => x.FcmToken).IsModified = true;
+        }
+
         user.LastLoginAt = DateTimeOffset.UtcNow;
         _context.Entry(user).Property(x => x.LastLoginAt).IsModified = true;
 
@@ -120,7 +121,7 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.HomePhone, user.PhoneNumber),
             new Claim(ClaimTypes.Name, user.FullName),
-            new Claim("empresaId(empresa_id)", user.EmpresaId.ToString()),
+            new Claim("empresa_id", user.EmpresaId.ToString()),
             new Claim(ClaimTypes.Role, user.Rol)
         };
 

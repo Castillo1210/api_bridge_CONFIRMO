@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace Confirmo.Api.Endpoints;
 
@@ -43,6 +45,24 @@ public static class AuthEndpoints
             //var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             var result = await auth.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
             return result.Success ? Results.Ok(result) : Results.BadRequest(result);
+        }).RequireAuthorization();
+
+        group.MapPut("/fcm-token", async (UpdateFcmTokenRequest request, HttpContext http, AppDbContext context) =>
+        {
+            var userIdClaim = http.User.FindFirst("sub") ?? http.User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var user = await context.Profiles.FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null) return Results.NotFound();
+
+            user.FcmToken = request.Token;
+            await context.SaveChangesAsync();
+
+            return Results.Ok(new { success = true });
         }).RequireAuthorization();
     }
 }

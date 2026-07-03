@@ -216,6 +216,7 @@ public static class DepositEndpoints
             AppDbContext context,
             ISignalRNotificationService notifications,
             IFCMNotificationService fcm,
+            IChatService chat,
             ILogger<Program> logger) => 
         { 
             var userId = GetUserId(http); 
@@ -248,6 +249,8 @@ public static class DepositEndpoints
                 deposit.Observaciones = request.Observaciones;
 
             await context.SaveChangesAsync();
+
+            await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito fue confirmado. ¡Gracias!");
 
             var notification = new DepositConfirmedNotification(
                 DepositId: deposit.Id,
@@ -297,6 +300,7 @@ public static class DepositEndpoints
             IStorageService storage,
             IRedisQueueService redisQueue,
             ISignalRNotificationService notifications,
+            IChatService chat,
             ILogger<Program> logger
         ) =>
         {
@@ -339,6 +343,7 @@ public static class DepositEndpoints
             deposit.WarningIds = Array.Empty<Guid>();
 
             await context.SaveChangesAsync();
+            await chat.AddSystemMessageAsync(deposit.Id, "Regularizaste este depósito. Será procesado nuevamente.");
 
             await EnqueueToRedis(redisQueue, deposit.Id, objectName, deposit.BancoId?.ToString());
 

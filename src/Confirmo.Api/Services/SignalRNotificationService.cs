@@ -169,6 +169,22 @@ public class SignalRNotificationService : ISignalRNotificationService
             timestamp = DateTimeOffset.UtcNow
         });
     }
+
+    public async Task NotifyPanelChatMessage(ChatMessageResponse message, Guid depositId)
+    {
+        await _hub.Clients.Group(PANEL_GROUP).SendAsync("ChatMessage", new
+        {
+            message,
+            depositId,
+            timestamp = DateTimeOffset.UtcNow
+        });
+        await _hub.Clients.Group(FINANCE_GROUP).SendAsync("ChatMessage", new
+        {
+            message,
+            depositId,
+            timestamp = DateTimeOffset.UtcNow
+        });
+    }
     
     // Sistema
     public Task NotifyConnectionStatus(Guid userId, string status, string? message = null)

@@ -41,6 +41,7 @@ public class ChatService : IChatService
         {
             var response = new ChatMessageResponse(msg.Id, msg.SenderType, msg.SenderId, msg.Content, msg.MessageType, msg.Metadata, msg.CreatedAt);
             await _signalR.SendChatMessage(deposit.VendedorId, response);
+            await _signalR.NotifyPanelChatMessage(response, depositId);
         }
     }
 
@@ -73,5 +74,10 @@ public class ChatService : IChatService
         }
 
         await _signalR.SendDirectMessage(userId, message, depositId);
+    }
+
+    public async Task AddSystemMessageAsync(Guid depositId, string content, object?  metadata = null)
+    {
+        await AddMessageAsync(depositId, "system", null, content, "status_change", metadata);
     }
 }

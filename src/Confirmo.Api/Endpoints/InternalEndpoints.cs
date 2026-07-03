@@ -20,6 +20,7 @@ public static class InternalEndpoints
             AppDbContext context,
             ISignalRNotificationService notifications,
             IFCMNotificationService fcm,
+            IChatService chat,
             ILogger<Program> logger
         ) =>
         {
@@ -50,6 +51,8 @@ public static class InternalEndpoints
                     deposit.DatosOcr = payload.DatosOcr;
                     
                     await context.SaveChangesAsync();
+
+                    await chat.AddSystemMessageAsync(deposit.Id, "Depósito confirmado por el sistema financiero");
                     
                     var notif = new DepositConfirmedNotification(
                         DepositId: deposit.Id,
@@ -74,6 +77,8 @@ public static class InternalEndpoints
                     deposit.DatosOcr = payload.DatosOcr;
 
                     await context.SaveChangesAsync();
+
+                    await chat.AddSystemMessageAsync(deposit.Id, $"Depósito rechazado: {deposit.MotivoRechazo}");
                     
                     await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, payload.MotivoRechazo ?? "Tu depósito ha sido rechazado.");
                     await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);
@@ -89,6 +94,7 @@ public static class InternalEndpoints
             [FromBody] WorkerResult payload,
             HttpContext http, AppDbContext context,
             ISignalRNotificationService notifications,
+            IChatService chat,
             IFCMNotificationService fcm, ILogger<Program> logger
         ) =>
         {
@@ -120,6 +126,7 @@ public static class InternalEndpoints
                 deposit.MotivoRechazo = ruleResult.RejectionReason;
                 await context.SaveChangesAsync();
 
+                await chat.AddSystemMessageAsync(deposit.Id, $"Depósito rechazado: {ruleResult.RejectionReason}");
                 await notifications.NotifyDepositRejectedWithDetails(
                     deposit.VendedorId, deposit.Id, ruleResult.UserMessage!);
                 await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);

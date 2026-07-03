@@ -36,4 +36,5 @@ public interface ISignalRNotificationService
     Task NotifyConnectionStatus(Guid userId, string status, string? message = null);
     Task NotifySystemAlert(Guid userId, SystemAlert alert);
     Task BroadcastSystemAlert(SystemAlert alert);
+    Task NotifyPanelChatMessage(ChatMessageResponse message, Guid depositId);
 }
