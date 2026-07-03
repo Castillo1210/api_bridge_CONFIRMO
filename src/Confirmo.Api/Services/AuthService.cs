@@ -69,6 +69,9 @@ public class AuthService : IAuthService
             return null;
         }
 
+        var hashNativo = HashPassword(request.Password);
+        _logger.LogInformation("El Has nativo es: {Hash}", hashNativo);
+
         // 2. 🚨 ¡LA LÍNEA FALTANTE! Validamos la contraseña contra el Hash real
         if (!VerifyPassword(request.Password, user.PasswordHash))
         {
