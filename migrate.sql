@@ -26,9 +26,6 @@ ALTER TABLE public.depositos ALTER COLUMN "ErrorIds" DROP NOT NULL;
 
 ALTER TABLE public.depositos ADD trabajador_id uuid;
 
-ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_trabajadores_trabajador_id" 
-    FOREIGN KEY (trabajador_id) REFERENCES public.trabajadores ("Id") ON DELETE RESTRICT;
-
 ALTER TABLE public.bancos ALTER COLUMN "Id" SET DEFAULT (gen_random_uuid());
 
 CREATE TABLE public.cuentasbancarias (
@@ -61,6 +58,9 @@ CREATE TABLE public.trabajadores (
     CONSTRAINT "FK_trabajadores_profiles_ProfileId" FOREIGN KEY ("ProfileId") REFERENCES public.profiles ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_trabajadores_sucursales_SucursalId" FOREIGN KEY ("SucursalId") REFERENCES public.sucursales ("Id") ON DELETE SET NULL
 );
+
+ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_trabajadores_trabajador_id" 
+    FOREIGN KEY (trabajador_id) REFERENCES public.trabajadores ("Id") ON DELETE RESTRICT;
 
 CREATE INDEX "IX_sucursales_EmpresaId" ON public.sucursales ("EmpresaId");
 
