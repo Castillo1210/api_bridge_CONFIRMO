@@ -24,7 +24,10 @@ ALTER TABLE public.depositos ALTER COLUMN "ImagenVoucher" TYPE character varying
 
 ALTER TABLE public.depositos ALTER COLUMN "ErrorIds" DROP NOT NULL;
 
-ALTER TABLE public.depositos ADD trabajador_id uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+ALTER TABLE public.depositos ADD trabajador_id uuid;
+
+ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_trabajadores_trabajador_id" 
+    FOREIGN KEY (trabajador_id) REFERENCES public.trabajadores ("Id") ON DELETE RESTRICT;
 
 ALTER TABLE public.bancos ALTER COLUMN "Id" SET DEFAULT (gen_random_uuid());
 
@@ -92,8 +95,6 @@ ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_profiles_ValidadoPor" 
 ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_profiles_VendedorId" FOREIGN KEY ("VendedorId") REFERENCES public.profiles ("Id") ON DELETE RESTRICT;
 
 ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_sucursales_SucursalId" FOREIGN KEY ("SucursalId") REFERENCES public.sucursales ("Id") ON DELETE RESTRICT;
-
-ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_trabajadores_trabajador_id" FOREIGN KEY (trabajador_id) REFERENCES public.trabajadores ("Id") ON DELETE RESTRICT;
 
 ALTER TABLE public.profiles ADD CONSTRAINT "FK_profiles_empresas_EmpresaId" FOREIGN KEY ("EmpresaId") REFERENCES public.empresas ("Id") ON DELETE RESTRICT;
 
