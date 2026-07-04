@@ -22,6 +22,7 @@ public record DepositResponse(
     string Moneda,
     DateTimeOffset FechaRegistro,
     string? ImagenVoucher,
+    string? ImagenUrl,
     string? Anexo,
     string? NumeroOperacionBanco,
     DateOnly? FechaDeposito,
@@ -55,16 +56,4 @@ public record DepositListPagedResponse(
     int TotalCount,
     int Page,
     int PageSize
-);
-
-public record BancoResponse(
-    Guid Id,
-    string Nombre,
-    string? Codigo
-);
-
-public record EmpresaResponse(
-    Guid Id,
-    string Nombre,
-    string? Logo
 );

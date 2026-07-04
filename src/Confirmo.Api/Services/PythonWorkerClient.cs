@@ -16,7 +16,7 @@ public class PythonWorkerClient : IPythonWorkerClient
     {
         try
         {
-            var response = await _http.PostAsJsonAsync("/tasks/process", new { deposit_id = depositId});
+            var response = await _http.PostAsJsonAsync("/process-deposit", new { deposit_id = depositId});
             response.EnsureSuccessStatusCode();
             _logger.LogInformation("Job encolado en Python Worker para deposit {DepositId}", depositId);
         }

@@ -21,7 +21,7 @@ public class Deposito
     public Guid? SucursalId { get; set; }
     public Guid VendedorId { get; set; }
     public Guid? ValidadoPor { get; set; }
-    public long? TrabajadorSucursalId { get; set; }
+    public Guid TrabajadorId { get; set; }
     public string? ReferenciaCliente { get; set; }
     public object? DatosOcr { get; set; }
     public string? TelefonoOrigen { get; set; }
@@ -30,46 +30,23 @@ public class Deposito
     public string? RucCliente { get; set; }
     public bool? EsAntiguo { get; set; }
     public DateOnly? FechaSoloDate { get; set; }
-    public Guid[] ErrorIds { get; set; } = Array.Empty<Guid>();
-    public Guid[] WarningIds { get; set; } = Array.Empty<Guid>();
+    public Guid[]? ErrorIds { get; set; } = Array.Empty<Guid>();
+    public Guid[]? WarningIds { get; set; } = Array.Empty<Guid>();
 
     // Navigation
     public Empresa? Empresa { get; set; }
     public Sucursal? Sucursal { get; set; }
     public Banco? Banco { get; set; }
     public Profile? Vendedor { get; set; }
-}
-
-public class Banco
-{
-    public Guid Id { get; set; }
-    public string Nombre { get; set; } = string.Empty;
-    public string? Codigo { get; set; }
-    public bool Activo { get; set; } = true;
-}
-
-public class Empresa
-{
-    public Guid Id { get; set; }
-    public string Nombre { get; set; } = string.Empty;
-    public string? Ruc { get; set; }
-    public string? Logo { get; set; }
-    public bool Activo { get; set; } = true;
-}
-
-public class Sucursal
-{
-    public Guid Id { get; set; }
-    public Guid EmpresaId { get; set; }
-    public string Nombre { get; set; } = string.Empty;
-    public string? Direccion { get; set; }
-    public bool Activo { get; set; }
+    public Trabajador? Trabajador { get; set; }
+    public Profile? Validador { get; set; }
 }
 
 public class Profile
 {
     public Guid Id { get; set; }
-    public string PhoneNumber { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public Guid EmpresaId { get; set; }
@@ -79,6 +56,9 @@ public class Profile
     public string? FcmToken { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
+
+    public Empresa? Empresa { get; set; }
+    public Sucursal? Sucursal { get; set; }
 }
 
 public static class DepositStates

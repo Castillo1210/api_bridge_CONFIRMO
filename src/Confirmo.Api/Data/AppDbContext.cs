@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Sucursal> Sucursales => Set<Sucursal>();
     public DbSet<Profile> Profiles => Set<Profile>();
+    public DbSet<CuentaBancaria> CuentasBancarias => Set<CuentaBancaria>();
+    public DbSet<Trabajador> Trabajadores => Set<Trabajador>();
     public DbSet<DepositMessage> DepositMessages => Set<DepositMessage>();
     public DbSet<VoucherBusinessError> VoucherBusinessErrors => Set<VoucherBusinessError>();
 

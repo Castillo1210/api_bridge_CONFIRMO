@@ -127,8 +127,10 @@ public class WorkerResultConsumer : BackgroundService
             }
             else
             {
+                deposit.Estado = DepositStates.Procesado;
                 deposit.Condicion = ruleResult.Condition;
                 deposit.Riesgo = ruleResult.Risk;
+                await db.SaveChangesAsync();
 
                 await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
                     "Tu depósito fue procesado. Esperando confirmación");

@@ -36,6 +36,13 @@ public static class DepositEndpoints
             // 1. Subir a GCS
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  "image/jpeg");
 
+            var trabajador = await context.Trabajadores.AsNoTracking().FirstOrDefaultAsync(t => t.ProfileId == userId && t.Activo);
+
+            if (trabajador == null)
+            {
+                return Results.BadRequest(new { error = "No hay un trabajador activo asignado a tu cuenta" });
+            }
+
             var deposit = new Deposito
             {
                 Id = Guid.NewGuid(),
@@ -45,6 +52,7 @@ public static class DepositEndpoints
                 EmpresaId = Guid.TryParse(request.EmpresaId, out var eId) ? eId : null,
                 SucursalId = user.SucursalId,
                 VendedorId = userId,
+                TrabajadorId = trabajador.Id,
                 Estado = DepositStates.Recibido,
                 FechaRegistro = DateTimeOffset.UtcNow
             };
@@ -95,6 +103,13 @@ public static class DepositEndpoints
                     
                     var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
 
+                    var trabajador = await context.Trabajadores.AsNoTracking().FirstOrDefaultAsync(t => t.ProfileId == userId && t.Activo);
+
+                    if (trabajador == null)
+                    {
+                        return Results.BadRequest(new { error = "No hay un trabajador activo asignado a tu cuenta" });
+                    }
+
                     var deposit = new Deposito
                     {
                         Id = Guid.NewGuid(),
@@ -104,6 +119,7 @@ public static class DepositEndpoints
                         EmpresaId = Guid.TryParse(item.EmpresaId, out var eId) ? eId : null,
                         SucursalId = user.SucursalId,
                         VendedorId = userId,
+                        TrabajadorId = trabajador.Id,
                         Estado = DepositStates.Recibido,
                         FechaRegistro = DateTimeOffset.UtcNow
                     };
@@ -132,12 +148,12 @@ public static class DepositEndpoints
         .WithDescription("Recibe una lista de vouchers, los sube a GCS, los registra en BD y los encola para procesamiento.");
         
         // GET: un depósito
-        group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context) =>
+        group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
             var userId = GetUserId(http);
             var deposit = await context.Depositos.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && d.VendedorId == userId);
 
-            return deposit is not null ? Results.Ok(MapToResponse(deposit)) : Results.NotFound();
+            return deposit is not null ? Results.Ok(await MapToResponseAsync(deposit, storage)) : Results.NotFound();
         });
         
         // GET: Listar depósitos
@@ -183,29 +199,6 @@ public static class DepositEndpoints
                     d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
-        });
-        
-        // GET: bancos
-        group.MapGet("/bancos", async (AppDbContext context) =>
-        {
-            var bancos = await context.Bancos
-                .AsNoTracking()
-                .Where(b => b.Activo)
-                .Select(b => new BancoResponse(b.Id, b.Nombre, b.Codigo))
-                .ToListAsync();
-
-            return Results.Ok(bancos);
-        });
-        
-        // GET: empresas
-        group.MapGet("/empresas", async (AppDbContext context) =>
-        {
-            var empresas = await context.Empresas
-                .AsNoTracking()
-                .Where(e => e.Activo)
-                .Select(e => new EmpresaResponse(e.Id, e.Nombre, e.Logo))
-                .ToListAsync();
-            return Results.Ok(empresas);
         });
         
         // POST: Confirmar depósito (finanzas/admin)
@@ -415,13 +408,30 @@ public static class DepositEndpoints
         ));
     }
     
-    private static DepositResponse MapToResponse(Deposito d) => new(
-        d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
-        d.ImagenVoucher, d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
-        d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion,
-        d.EmpresaId, d.BancoId, d.SucursalId, d.VendedorId,
-        d.ReferenciaCliente, d.DatosOcr, d.RucCliente
-    );
+    private static async Task<DepositResponse> MapToResponseAsync(Deposito d, IStorageService storage)
+    {
+        string? imageUrl = null;
+
+        if (!string.IsNullOrEmpty(d.ImagenVoucher))
+        {
+            try
+            {
+                imageUrl = await storage.GetSignedUrlAsync(d.ImagenVoucher);
+            }
+            catch
+            {
+                
+            }
+        }
+
+        return new DepositResponse(
+            d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
+            d.ImagenVoucher, imageUrl,d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
+            d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion,
+            d.EmpresaId, d.BancoId, d.SucursalId, d.VendedorId,
+            d.ReferenciaCliente, d.DatosOcr, d.RucCliente
+        );
+    }
 }
 
 public record BatchDepositsRequest(List<DepositCreateRequest> Items);

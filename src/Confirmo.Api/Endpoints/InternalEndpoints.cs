@@ -18,12 +18,17 @@ public static class InternalEndpoints
         group.MapPost("/webhooks/deposit-processed", async (
             [FromBody] ProcessedDepositCallback payload,
             AppDbContext context,
+            HttpContext http,
             ISignalRNotificationService notifications,
             IFCMNotificationService fcm,
             IChatService chat,
             ILogger<Program> logger
         ) =>
         {
+            if (!http.Request.Headers.TryGetValue("X-Internal-Secret", out var secret)
+                || secret != app.Configuration["InternalSecret"])
+                return Results.Unauthorized();
+
             var deposit = await context.Depositos
                 .Include(d => d.Empresa)
                 .Include(d => d.Sucursal)
@@ -138,6 +143,9 @@ public static class InternalEndpoints
             }
             else
             {
+                deposit.Estado = DepositStates.Procesado;
+                await context.SaveChangesAsync();
+
                 await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
                     "Tu depósito fue procesado. Esperando confirmación.");
             }

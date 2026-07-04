@@ -33,7 +33,7 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("El Password es correcto: {EsValido}", esValido);
 
-        if (!VerifyPassword(currentPassword, user.PasswordHash))
+        if (!esValido)
         {
             return new ChangePasswordResponse(false, "Contraseña actual incorrecta");
         }
@@ -56,11 +56,20 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var user = await _context.Profiles.FirstOrDefaultAsync(p => p.PhoneNumber == request.PhoneNumber && p.Activo);
+        Profile? user = null;
+
+        if (!string.IsNullOrEmpty(request.Email))
+        {
+            user = await _context.Profiles.FirstOrDefaultAsync(p => p.Email == request.Email && p.Activo);
+        }
+        else if (!string.IsNullOrEmpty(request.PhoneNumber))
+        {
+            user = await _context.Profiles.FirstOrDefaultAsync(p => p.PhoneNumber == request.PhoneNumber && p.Activo);
+        }
 
         if (user == null)
         {
-            _logger.LogWarning("Login fallido para número: {PhoneNumber}", request.PhoneNumber);
+            _logger.LogWarning("Login fallido");
             return null;
         }
 
@@ -70,7 +79,7 @@ public class AuthService : IAuthService
         // 2. 🚨 ¡LA LÍNEA FALTANTE! Validamos la contraseña contra el Hash real
         if (!VerifyPassword(request.Password, user.PasswordHash))
         {
-            _logger.LogWarning("Contraseña incorrecta para número: {PhoneNumber}", request.PhoneNumber);
+            _logger.LogWarning("Contraseña incorrecta para {Identifier}", request.Email ?? request.PhoneNumber);
             return null; // Si no coincide, rechaza el login de inmediato
         }
 
@@ -94,7 +103,7 @@ public class AuthService : IAuthService
             accessToken,
             refreshToken,
             _config.GetValue<int>("Jwt:AccessTokenHours") * 3600,
-            new UserInfo(user.Id, user.PhoneNumber, user.FullName, user.EmpresaId, user.SucursalId, user.FcmToken)
+            new UserInfo(user.Id, user.PhoneNumber, user.Email, user.FullName, user.EmpresaId, user.SucursalId, user.FcmToken)
         );
     }
 
@@ -116,14 +125,18 @@ public class AuthService : IAuthService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Secret"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new []
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.HomePhone, user.PhoneNumber),
-            new Claim(ClaimTypes.Name, user.FullName),
-            new Claim("empresa_id", user.EmpresaId.ToString()),
-            new Claim(ClaimTypes.Role, user.Rol)
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.FullName),
+            new("empresa_id", user.EmpresaId.ToString()),
+            new(ClaimTypes.Role, user.Rol)
         };
+
+        if (!string.IsNullOrEmpty(user.PhoneNumber))
+            claims.Add(new(ClaimTypes.HomePhone, user.PhoneNumber));
+        if (!string.IsNullOrEmpty(user.Email))
+            claims.Add(new(ClaimTypes.Email, user.Email));
 
         var token = new JwtSecurityToken(
             issuer: _config["Jwt:Issuer"] ?? "confirmo-api",

@@ -17,7 +17,7 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.Property(d => d.Monto).HasPrecision(12, 2).IsRequired();
         builder.Property(d => d.Moneda).IsRequired().HasMaxLength(3);
         builder.Property(d => d.FechaRegistro).HasDefaultValueSql("now()");
-        builder.Property(d => d.ImagenVoucher).HasMaxLength(100);
+        builder.Property(d => d.ImagenVoucher).HasMaxLength(500);
         builder.Property(d => d.Estado).IsRequired().HasMaxLength(20).HasDefaultValue("recibido");
         builder.Property(d => d.Observaciones).HasMaxLength(1000);
         builder.Property(d => d.Condicion).HasMaxLength(100);
@@ -34,6 +34,18 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
 
         // En DepositoConfiguration.Configure() - AGREGAR al final:
 
+        // FKs con Restrict para evitar borrados en cascada
+        builder.HasOne(d => d.Empresa).WithMany().HasForeignKey(d => d.EmpresaId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(d => d.Banco).WithMany().HasForeignKey(d => d.BancoId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(d => d.Sucursal).WithMany().HasForeignKey(d => d.SucursalId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(d => d.Vendedor).WithMany().HasForeignKey(d => d.VendedorId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(d => d.Validador).WithMany().HasForeignKey(d => d.ValidadoPor)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Campos para integración Worker
         builder.Property(d => d.ErrorIds)
             .HasColumnType("uuid[]")
@@ -42,6 +54,9 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.Property(d => d.WarningIds)
             .HasColumnType("uuid[]")
             .HasDefaultValueSql("'{}'::uuid[]");
+
+        builder.Property(d => d.TrabajadorId).IsRequired().HasColumnName("trabajador_id");
+        builder.HasOne(d => d.Trabajador).WithMany().HasForeignKey(d => d.TrabajadorId).OnDelete(DeleteBehavior.Restrict);
 
         // Índices para consultas frecuentes
         builder.HasIndex(d => d.ErrorIds)
@@ -54,51 +69,24 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
     }
 }
 
-public class BancoConfiguration : IEntityTypeConfiguration<Banco>
-{
-    public void Configure(EntityTypeBuilder<Banco> builder)
-    {
-        builder.ToTable("bancos", "public");
-        builder.HasKey(b => b.Id);
-        builder.Property(b => b.Nombre).IsRequired().HasMaxLength(100);
-        builder.Property(b => b.Codigo).HasMaxLength(20);
-    }
-}
-
-public class EmpresaConfiguration : IEntityTypeConfiguration<Empresa>
-{
-    public void Configure(EntityTypeBuilder<Empresa> builder)
-    {
-        builder.ToTable("empresas", "public");
-        builder.HasKey(e => e.Id);
-        builder.Property(e => e.Nombre).IsRequired().HasMaxLength(200);
-        builder.Property(e => e.Logo).HasMaxLength(500);
-        builder.Property(e => e.Ruc).HasMaxLength(20);
-    }
-}
-
-public class SucursalConfiguration : IEntityTypeConfiguration<Sucursal>
-{
-    public void Configure(EntityTypeBuilder<Sucursal> builder)
-    {
-        builder.ToTable("sucursales", "public");
-        builder.HasKey(s => s.Id);
-        builder.Property(s => s.Nombre).IsRequired().HasMaxLength(200);
-        builder.Property(s => s.Direccion).HasMaxLength(500);
-    }
-}
-
 public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
 {
     public void Configure(EntityTypeBuilder<Profile> builder)
     {
         builder.ToTable("profiles", "public");
         builder.HasKey(p => p.Id);
-        builder.Property(p => p.PhoneNumber).IsRequired().HasMaxLength(100);
+        builder.Property(p => p.PhoneNumber).HasMaxLength(100);
         builder.HasIndex(p => p.PhoneNumber).IsUnique();
+        builder.Property(p => p.Email).HasMaxLength(200);
+        builder.HasIndex(p => p.Email).IsUnique().HasFilter("email IS NOT NULL");
         builder.Property(p => p.PasswordHash).IsRequired().HasMaxLength(255);
         builder.Property(p => p.FullName).IsRequired().HasMaxLength(200);
         builder.Property(p => p.Rol).HasMaxLength(55);
         builder.Property(p => p.FcmToken).HasMaxLength(500);
+
+        builder.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(p => p.Sucursal).WithMany().HasForeignKey(p => p.SucursalId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
