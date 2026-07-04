@@ -64,7 +64,7 @@ ALTER TABLE public.depositos ADD CONSTRAINT "FK_depositos_trabajadores_trabajado
 
 CREATE INDEX "IX_sucursales_EmpresaId" ON public.sucursales ("EmpresaId");
 
-CREATE UNIQUE INDEX "IX_profiles_Email" ON public.profiles ("Email") WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX "IX_profiles_Email" ON public.profiles ("Email") WHERE "Email" IS NOT NULL;
 
 CREATE INDEX "IX_profiles_EmpresaId" ON public.profiles ("EmpresaId");
 
