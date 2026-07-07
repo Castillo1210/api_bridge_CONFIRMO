@@ -31,7 +31,11 @@ public class FCMNotificationService : IFCMNotificationService
 
                 if (!string.IsNullOrEmpty(projectId))
                 {
-                    FirebaseApp.Create(new AppOptions { ProjectId = projectId });
+                    FirebaseApp.Create(new AppOptions 
+                    {
+                        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.GetApplicationDefault(), 
+                        ProjectId = projectId 
+                    });
                 }
                 else
                 {
