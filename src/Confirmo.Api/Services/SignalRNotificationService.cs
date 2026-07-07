@@ -24,7 +24,7 @@ public class SignalRNotificationService : ISignalRNotificationService
         => SendToUser(userId, "DepositReceived", new { depositId, timestamp = DateTimeOffset.UtcNow });
 
     public Task NotifyDepositProcessing(Guid userId, Guid depositId, string message)
-        => SendToUser(userId, "DepositProcessingUpdateStatusUpdate", new { status = "processing", message, timestamp = DateTimeOffset.UtcNow });
+        => SendToUser(userId, "DepositProcessingUpdateStatusUpdate", new { depositId, status = "processing", message, timestamp = DateTimeOffset.UtcNow });
 
     public Task NotifyDepositConfirmed(Guid userId, Guid depositId, DepositConfirmedNotification notification)
     {
