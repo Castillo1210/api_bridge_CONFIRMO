@@ -196,7 +196,7 @@ public static class DepositEndpoints
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
-                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito)).ToListAsync();
+                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito, d.ValidadoPor)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
@@ -212,7 +212,7 @@ public static class DepositEndpoints
             IChatService chat,
             ILogger<Program> logger) => 
         { 
-            var userId = GetUserId(http); 
+            var userId = GetUserId(http);
 
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
@@ -225,6 +225,11 @@ public static class DepositEndpoints
                 .FirstOrDefaultAsync(d => d.Id == id);
 
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
+
+            if (deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId)
+            {
+                return Results.BadRequest(new { error = "No puedes confirmar este depósito porque está siendo validado por otro usuario." });
+            }
 
             if (deposit.Estado != DepositStates.Procesado)
             {
@@ -356,6 +361,65 @@ public static class DepositEndpoints
         .RequireAuthorization()
         .WithSummary("Regularizar un depósito rechazado")
         .WithDescription("Permite al vendedor re-subir la imagen de un depósito rechazado para re-procesarlo.");
+
+        // POSt: Comprobar duplicados de depósito
+        group.MapPost("/check-duplicate", async ([FromBody] CheckDuplicateRequest request, AppDbContext context) =>
+        {
+            var query = context.Depositos
+                .Include(d => d.Sucursal)
+                .Include(d => d.Trabajador)
+                .AsNoTracking()
+                .Where(d => d.Estado == DepositStates.Confirmado && d.Monto == request.Monto && d.Moneda == request.Moneda && d.NumeroOperacion == request.NumeroOperacion);
+
+            if (request.ExcludeId.HasValue)
+            {
+                query = query.Where(d => d.Id != request.ExcludeId.Value);
+            }
+
+            var duplicates = await query.Select(d => new
+            {
+                id = d.Id,
+                sucursal = d.Sucursal,
+                trabajador = d.Trabajador
+            }).ToListAsync();
+
+            return Results.Ok(new { duplicates });
+        }).RequireAuthorization().WithSummary("Comprobar depósitos duplicados");
+
+        // POST: Bloquear depósito (Lock)
+        group.MapPost("/{id:guid}/lock", async (Guid id, HttpContext http, AppDbContext context) =>
+        {
+            var userId = GetUserId(http);
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit ==  null) return Results.NotFound();
+
+            if (deposit.Estado != DepositStates.Procesado)
+            {
+                return Results.BadRequest(new { error = "El depósito ya está siendo revisado por otro usuario." });
+            }
+
+            deposit.ValidadoPor = userId;
+            deposit.FechaValidacion = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync();
+
+            // Notificación vía SignalR si deseas que los demás vean el candado en tiempo real
+            return Results.Ok(new { success = true });
+        }).RequireAuthorization();
+
+        // POST: Desbloquear depósito (Unlock)
+        group.MapPost("/{id:guid}/unlock", async (Guid id, HttpContext http, AppDbContext context) =>
+        {
+            var userId = GetUserId(http);
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound();
+
+            if (deposit.ValidadoPor == userId && deposit.Estado == DepositStates.Procesado)
+            {
+                deposit.ValidadoPor = null;
+                await context.SaveChangesAsync();
+            }
+            return Results.Ok(new { success = true });
+        }).RequireAuthorization();
     }
     
     // Helpers privados
@@ -427,7 +491,7 @@ public static class DepositEndpoints
         return new DepositResponse(
             d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
             d.ImagenVoucher, imageUrl,d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
-            d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion,
+            d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion, d.ValidadoPor,
             d.EmpresaId, d.BancoId, d.SucursalId, d.VendedorId,
             d.ReferenciaCliente, d.DatosOcr, d.RucCliente
         );

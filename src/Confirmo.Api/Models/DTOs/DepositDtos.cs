@@ -30,6 +30,7 @@ public record DepositResponse(
     string? Observaciones,
     string? MotivoRechazo,
     DateTimeOffset? FechaValidacion,
+    Guid? ValidadoPor,
     Guid? EmpresaId,
     Guid? BancoId,
     Guid? SucursalId,
@@ -48,7 +49,8 @@ public record DepositListResponse(
     DateTimeOffset FechaRegistro,
     string Estado,
     string? NumeroOperacionBanco,
-    DateOnly? FechaDeposito
+    DateOnly? FechaDeposito,
+    Guid? ValidadoPor
 );
 
 public record DepositListPagedResponse(
@@ -56,4 +58,11 @@ public record DepositListPagedResponse(
     int TotalCount,
     int Page,
     int PageSize
+);
+
+public record CheckDuplicateRequest(
+    decimal Monto,
+    string Moneda,
+    string NumeroOperacion,
+    Guid? ExcludeId
 );
