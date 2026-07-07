@@ -151,7 +151,12 @@ public static class DepositEndpoints
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
             var userId = GetUserId(http);
-            var deposit = await context.Depositos.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && d.VendedorId == userId);
+            var deposit = await context.Depositos
+                .Include(d => d.Empresa)
+                .Include(d => d.Banco)
+                .Include(d => d.Sucursal)
+                .Include(d => d.Trabajador)
+                .AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && d.VendedorId == userId);
 
             return deposit is not null ? Results.Ok(await MapToResponseAsync(deposit, storage)) : Results.NotFound();
         });
@@ -196,7 +201,7 @@ public static class DepositEndpoints
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
-                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito, d.ValidadoPor)).ToListAsync();
+                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.TrabajadorId, d.ValidadoPor)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
@@ -492,8 +497,11 @@ public static class DepositEndpoints
             d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
             d.ImagenVoucher, imageUrl,d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
             d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion, d.ValidadoPor,
-            d.EmpresaId, d.BancoId, d.SucursalId, d.VendedorId,
-            d.ReferenciaCliente, d.DatosOcr, d.RucCliente
+            d.EmpresaId, d.BancoId, d.SucursalId, d.TrabajadorId, d.TrabajadorId,
+            d.ReferenciaCliente, d.DatosOcr, d.RucCliente, d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null,
+            d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,
+            d.Sucursal != null ? new SucursalResponse(d.Sucursal.Id, d.Sucursal.EmpresaId, d.Sucursal.Nombre, d.Sucursal.Direccion, d.Sucursal.Activo) : null,
+            d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null
         );
     }
 }

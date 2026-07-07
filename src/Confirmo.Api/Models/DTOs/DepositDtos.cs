@@ -35,9 +35,15 @@ public record DepositResponse(
     Guid? BancoId,
     Guid? SucursalId,
     Guid VendedorId,
+    Guid TrabajadorId,
     string? ReferenciaCliente,
     object? DatosOcr,
-    string? RucCliente
+    string? RucCliente,
+
+    EmpresaResponse? Empresa = null,
+    BancoResponse? Banco = null,
+    SucursalResponse? Sucursal = null,
+    TrabajadorResponse? Trabajador = null
 );
 
 public record DepositListResponse(
@@ -50,6 +56,8 @@ public record DepositListResponse(
     string Estado,
     string? NumeroOperacionBanco,
     DateOnly? FechaDeposito,
+    Guid? SucursalId,
+    Guid? TrabajadorId,
     Guid? ValidadoPor
 );
 
