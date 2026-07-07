@@ -137,12 +137,22 @@ public class WorkerResultConsumer : BackgroundService
                 deposit.Condicion = ruleResult.Condition;
                 deposit.Riesgo = ruleResult.Risk;
 
-                await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito fue procesado exitosamente. Esperando confirmación de finanzas.");
+                await db.SaveChangesAsync();
+
+                var successMessage = "Tu depósito fue procesado exitosamente. Esperando confirmación de finanzas.";
+
+                var alreadyHasMessage = await db.DepositMessages
+                    .AnyAsync(m => m.DepositId == deposit.Id && m.Content == successMessage);
+
+                if (!alreadyHasMessage)
+                {
+                    await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito fue procesado exitosamente. Esperando confirmación de finanzas.");
+                }
 
                 await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
                     "Tu depósito fue procesado. Esperando confirmación");
 
-                await db.SaveChangesAsync();
+                //await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Procesado, oldStatus);
             }
         }
         

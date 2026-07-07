@@ -32,11 +32,12 @@ public static class ChatEndpoints
         ) =>
         {
             var userId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-            await chat.AddMessageAsync(depositId, "user", userId, request.Content, "text");
+            var type = string.IsNullOrEmpty(request.MessageType) ? "text" : request.MessageType;
+            await chat.AddMessageAsync(depositId, "user", userId, request.Content ?? "", type);
             return Results.Ok();
         });
     }
 }
 
-public record SendUserMessageRequest(string Content);
+public record SendUserMessageRequest(string Content, string? MessageType);
 public record UploadChatImageRequest(string ImagenBase64);
