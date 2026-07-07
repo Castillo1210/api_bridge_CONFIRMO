@@ -55,7 +55,13 @@ public class WorkerResultConsumer : BackgroundService
                         }
 
                         var data = dataField.Value.ToString();
-                        var result = JsonSerializer.Deserialize<WorkerResult>(data);
+
+                        var options = new JsonSerializerOptions
+                        {
+                            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                        };
+
+                        var result = JsonSerializer.Deserialize<WorkerResult>(data, options);
 
                         if (result == null)
                         {
