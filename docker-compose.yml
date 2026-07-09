@@ -191,6 +191,24 @@ services:
           memory: 512M
           cpus: '0.5'
 
+  reverse-proxy:
+    image: caddy:2-alpine
+    container_name: caddy-proxy
+    environment:
+      - DOMAIN=${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api-bridge
+    networks:
+      - confirmo-network
+    restart: unless-stopped
+
 networks:
   confirmo-network:
     driver: bridge
@@ -198,3 +216,5 @@ networks:
 volumes:
     redis-data:
     worker-logs:
+    caddy-data:
+    caddy-configs:
