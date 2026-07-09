@@ -217,4 +217,4 @@ volumes:
     redis-data:
     worker-logs:
     caddy-data:
-    caddy-configs:
+    caddy-config:
