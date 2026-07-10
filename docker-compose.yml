@@ -215,12 +215,11 @@ services:
       context: ../fronted
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: https://n5vqr8.tyresperu.com
-        VITE_SIGNALR_HUB_URL: wss://n5vqr8.tyresperu.com/hubs/deposits
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_SIGNALR_HUB_URL: ${VITE_SIGNALR_HUB_URL}
         VITE_GOOGLE_API_KEY: ${VITE_GOOGLE_API_KEY}
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+        VITE_USE_MOCK_DATA: ${VITE_USE_MOCK_DATA:-false}
     container_name: fronted
     expose:
       - "80"
