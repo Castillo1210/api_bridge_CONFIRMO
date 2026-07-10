@@ -2,6 +2,7 @@ namespace Confirmo.Api.Models.DTOs;
 
 public record ChatMessageResponse(
     Guid Id,
+    Guid DepositId,
     string SenderType,
     Guid? SenderId,
     string Content,

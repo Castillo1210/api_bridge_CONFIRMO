@@ -39,7 +39,7 @@ public class ChatService : IChatService
 
         if (deposit != null)
         {
-            var response = new ChatMessageResponse(msg.Id, msg.SenderType, msg.SenderId, msg.Content, msg.MessageType, msg.Metadata, msg.CreatedAt);
+            var response = new ChatMessageResponse(msg.Id, msg.DepositId, msg.SenderType, msg.SenderId, msg.Content, msg.MessageType, msg.Metadata, msg.CreatedAt);
             await _signalR.SendChatMessage(deposit.VendedorId, response);
             await _signalR.NotifyPanelChatMessage(response, depositId);
         }
@@ -60,7 +60,7 @@ public class ChatService : IChatService
 
         var messages = await query.Take(limit + 1).ToListAsync();
         var hasMore = messages.Count > limit;
-        var items = messages.Take(limit).Select(m => new ChatMessageResponse(m.Id, m.SenderType, m.SenderId, m.Content, m.MessageType, m.Metadata, m.CreatedAt)).ToList();
+        var items = messages.Take(limit).Select(m => new ChatMessageResponse(m.Id, m.DepositId, m.SenderType, m.SenderId, m.Content, m.MessageType, m.Metadata, m.CreatedAt)).ToList();
         items.Reverse();
 
         return new ChatHistoryResponse(items, hasMore);
