@@ -196,6 +196,7 @@ services:
     container_name: caddy-proxy
     environment:
       - DOMAIN=${DOMAIN}
+      - DOMAIN_FRONTED=${DOMAIN_FRONTED}
     ports:
       - "80:80"
       - "443:443"
@@ -205,6 +206,7 @@ services:
       - caddy-config:/config
     depends_on:
       - api-bridge
+      - fronted
     networks:
       - confirmo-network
     restart: unless-stopped
