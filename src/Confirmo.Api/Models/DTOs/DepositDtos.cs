@@ -57,6 +57,7 @@ public record DepositListResponse(
     string? NumeroOperacionBanco,
     DateOnly? FechaDeposito,
     Guid? SucursalId,
+    Guid? BancoId,
     Guid? TrabajadorId,
     Guid? ValidadoPor
 );
