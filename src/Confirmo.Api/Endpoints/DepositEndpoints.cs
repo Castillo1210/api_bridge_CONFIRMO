@@ -193,8 +193,8 @@ public static class DepositEndpoints
             }
 
             if (!string.IsNullOrEmpty(estado)) query = query.Where(d => d.Estado == estado);
-            if (desde.HasValue) query = query.Where(d => d.FechaRegistro >= desde.Value);
-            if (hasta.HasValue) query = query.Where(d => d.FechaRegistro <= hasta.Value);
+            if (desde.HasValue) query = query.Where(d => d.FechaRegistro >= desde.Value.ToUniversalTime());
+            if (hasta.HasValue) query = query.Where(d => d.FechaRegistro <= hasta.Value.ToUniversalTime());
 
             var total = await query.CountAsync();
             var items = await query
