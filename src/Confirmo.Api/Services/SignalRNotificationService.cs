@@ -216,6 +216,21 @@ public class SignalRNotificationService : ISignalRNotificationService
 
     public Task BroadcastSystemAlert(SystemAlert alert)
         => _hub.Clients.All.SendAsync("SystemAlert", alert);
+
+    public async Task NotifyVendedorChatMessage(VendedorMessageResponse message)
+    {
+        var payload = new
+        {
+            message,
+            vendedorId = message.VendedorId,
+            timestamp = DateTimeOffset.UtcNow
+        };
+
+        await _hub.Clients.User(message.VendedorId.ToString()).SendAsync("ChatMessage", payload);
+
+        await _hub.Clients.Group(PANEL_GROUP).SendAsync("ChatMessage", payload);
+        await _hub.Clients.Group(FINANCE_GROUP).SendAsync("ChatMessage", payload);
+    }
     
     // Helpers
     private Task SendToUser(Guid userId, string method, object payload)

@@ -139,6 +139,7 @@ app.MapAuthEndpoints();
 app.MapDepositEndpoints();
 app.MapInternalEndpoints();
 app.MapChatEndpoints();
+app.MapVendedorChatEndpoints();
 app.MapMasterEndpoints();
 
 // SignalR Hub

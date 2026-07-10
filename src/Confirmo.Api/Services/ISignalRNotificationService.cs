@@ -16,6 +16,7 @@ public interface ISignalRNotificationService
     // Chat
     Task SendChatMessage(Guid userId, ChatMessageResponse message);
     Task SendDirectMessage(Guid userId, string message, Guid? depositId = null);
+    Task NotifyVendedorChatMessage(VendedorMessageResponse message);
 
     Task NotifyValidationErrors(Guid userId, Guid depositId, List<VoucherBusinessError> errors);
     Task NotifyRequiresReview(Guid userId, Guid depositId, List<VoucherBusinessError> warnings);

@@ -21,3 +21,20 @@ public record ChatHistoryResponse(
     List<ChatMessageResponse> Messages,
     bool HasMore
 );
+
+public record VendedorMessageResponse(
+    Guid Id,
+    Guid VendedorId,
+    string SenderType,
+    Guid? SenderId,
+    string Content,
+    string MessageType,
+    DateTimeOffset CreatedAt
+);
+
+public record VendedorChatHistoryResponse(
+    List<VendedorMessageResponse> Messages,
+    bool HasMore
+);
+
+public record SendVendedorMessageRequest(string Content, string? MessageType);

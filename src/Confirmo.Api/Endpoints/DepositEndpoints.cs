@@ -255,7 +255,10 @@ public static class DepositEndpoints
 
             await context.SaveChangesAsync();
 
-            await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito fue confirmado. ¡Gracias!");
+            var placeholders = ChatService.BuildDepositPlaceholders(deposit);
+            var mensaje = await chat.RenderPlantillaAsync("deposito_confirmado", placeholders);
+
+            await chat.AddSystemMessageAsync(deposit.Id, mensaje);
 
             var notification = new DepositConfirmedNotification(
                 DepositId: deposit.Id,
@@ -343,7 +346,10 @@ public static class DepositEndpoints
 
             await context.SaveChangesAsync();
 
-            await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito ha sido rechazado.");
+            var placeholders = ChatService.BuildDepositPlaceholders(deposit, request.Observaciones);
+            var mensaje = await chat.RenderPlantillaAsync("deposito_rechazado", placeholders);
+
+            await chat.AddSystemMessageAsync(deposit.Id, mensaje);
 
             await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, deposit.Observaciones);
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);

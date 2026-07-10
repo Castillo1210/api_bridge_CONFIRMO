@@ -80,4 +80,80 @@ public class ChatService : IChatService
     {
         await AddMessageAsync(depositId, "system", null, content, "status_change", metadata);
     }
+
+    public async Task<VendedorMessageResponse> AddVendedorMessageAsync(Guid vendedorId, string senderType, Guid? senderId, string content, string messageType = "text")
+    {
+        var msg = new VendedorMessage
+        {
+            Id = Guid.NewGuid(),
+            VendedorId = vendedorId,
+            SenderType = senderType,
+            SenderId = senderId,
+            Content = content,
+            MessageType = messageType,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        _context.VendedorMessages.Add(msg);
+        await _context.SaveChangesAsync();
+
+        var response = new VendedorMessageResponse(msg.Id, msg.VendedorId, msg.SenderType, msg.SenderId, msg.Content, msg.MessageType, msg.CreatedAt);
+
+        await _signalR.NotifyVendedorChatMessage(response);
+
+        return response;
+    }
+
+    public async Task<VendedorChatHistoryResponse> GetVendedorHistoryAsync(Guid vendedorId, DateTimeOffset? before = null, int limit = 50)
+    {
+        var query = _context.VendedorMessages
+            .AsNoTracking()
+            .Where(m => m.VendedorId == vendedorId);
+
+        if (before.HasValue) query = query.Where(m => m.CreatedAt < before.Value);
+
+        query = query.OrderByDescending(m => m.CreatedAt);
+
+        var messages = await query.Take(limit + 1).ToListAsync();
+        var hasMore = messages.Count > limit;
+        var items = messages.Take(limit)
+            .Select(m => new VendedorMessageResponse(m.Id, m.VendedorId, m.SenderType, m.SenderId, m.Content, m.MessageType, m.CreatedAt))
+            .ToList();
+        
+        items.Reverse();
+
+        return new VendedorChatHistoryResponse(items, hasMore);
+    }
+
+    public async Task<string> RenderPlantillaAsync(string codigo, Dictionary<string, string?> valores)
+    {
+        var plantilla = await _context.PlantillasMensajesSistema.AsNoTracking().FirstOrDefaultAsync(p => p.Codigo == codigo && p.Activo);
+
+        var contenido = plantilla?.Contenido ?? $"[Falta configurar la plantilla '{codigo}']";
+
+        foreach (var (token, valor) in valores)
+        {
+            contenido = contenido.Replace("{{" + token + "}}", string.IsNullOrWhiteSpace(valor) ? "N/A" : valor);
+        }
+
+        contenido = System.Text.RegularExpressions.Regex.Replace(contenido, @"\{\{\s*\w+\s*\}\}", "N/A");
+
+        return contenido;
+    }
+
+    public static Dictionary<string, string?> BuildDepositPlaceholders(Models.Entities.Deposito deposito, string? observaciones = null)
+    {
+        return new Dictionary<string, string?>
+        {
+            ["empresa"] = deposito.Empresa?.Nombre,
+            ["sucursal"] = deposito.Sucursal?.Nombre,
+            ["banco"] = deposito.Banco?.Nombre,
+            ["anexo"] = deposito.Anexo,
+            ["fecha_deposito"] = deposito.FechaDeposito?.ToString("dd/MM/yyyy"),
+            ["operacion"] = deposito.NumeroOperacionBanco ?? deposito.NumeroOperacion,
+            ["importe"] = $"{deposito.Moneda} {deposito.Monto:0.00}",
+            ["cliente"] = deposito.Cliente,
+            ["observaciones"] = observaciones ?? deposito.Observaciones,
+        };
+    }
 }
