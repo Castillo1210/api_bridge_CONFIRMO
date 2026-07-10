@@ -10,7 +10,7 @@ public interface IFCMNotificationService
 {
     Task SendNotificationAsync(string fcmToken, string title, string body, Dictionary<string, string>? data = null);
     Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification);
-    Task SendDepositRejectedAsync(string fcmToken, List<VoucherBusinessError> errors);
+    Task SendDepositRejectedAsync(string fcmToken, string reason);
     Task SendProcessingAsync(string fcmToken, string message);
 }
 
@@ -116,19 +116,12 @@ public class FCMNotificationService : IFCMNotificationService
         await SendNotificationAsync(fcmToken, title, body, data);
     }
 
-    public async Task SendDepositRejectedAsync(string fcmToken, List<VoucherBusinessError> errors)
+    public async Task SendDepositRejectedAsync(string fcmToken, string reason)
     {
-        var firstError = errors.FirstOrDefault();
         var title = "✖️ Depósito Rechazado";
-        var body = firstError?.Message ?? "Tu depósito ha sido rechazado";
+        var body = $"Tu depósito ha sido rechazado: {reason}";
 
-        var data = new Dictionary<string, string>
-        {
-            ["type"] = "deposit_rejected",
-            ["errors"] = JsonSerializer.Serialize(errors.Select(e => new { e.ErrorCode, e.FieldName, e.Message }))
-        };
-
-        await SendNotificationAsync(fcmToken, title, body, data);
+        await SendNotificationAsync(fcmToken, title, body);
     }
 
     public async Task SendProcessingAsync(string fcmToken, string message)

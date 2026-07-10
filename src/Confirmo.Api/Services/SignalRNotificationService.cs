@@ -156,6 +156,27 @@ public class SignalRNotificationService : ISignalRNotificationService
         await _hub.Clients.Group(FINANCE_GROUP).SendAsync("PanelDepositStatusChanged", payload);
     }
 
+    public async Task NotifyPanelDepositLocked(Guid depositId, Guid validateBy, string? validateByName)
+    {
+        var payload = new
+        {
+            depositId,
+            validadoPor = validateBy,
+            validadoPorNombre = validateByName,
+            timestamp = DateTimeOffset.UtcNow
+        };
+
+        await _hub.Clients.Group(PANEL_GROUP).SendAsync("PanelDepositLocked", payload);
+        await _hub.Clients.Group(FINANCE_GROUP).SendAsync("PanelDepositLocked", payload);
+    }
+
+    public async Task NotifyPanelDepositUnlocked(Guid depositId)
+    {
+        var payload = new { depositId, timestamp = DateTimeOffset.UtcNow };
+        await _hub.Clients.Group(PANEL_GROUP).SendAsync("PanelDepositUnlocked", payload);
+        await _hub.Clients.Group(FINANCE_GROUP).SendAsync("PanelDepositUnlocked", payload);
+    }
+
     public async Task NotifyPanelStatsUpdate(string group, PanelStatsUpdate stats)
     {
         var targetGroup = group switch

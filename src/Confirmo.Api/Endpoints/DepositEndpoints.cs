@@ -5,6 +5,7 @@ using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Confirmo.Api.Endpoints;
 
@@ -247,6 +248,7 @@ public static class DepositEndpoints
             var oldStatus = deposit.Estado;
             deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
+            deposit.Anexo = request?.Anexo;
             deposit.ValidadoPor = userId;
             if (request?.Observaciones != null)
                 deposit.Observaciones = request.Observaciones;
@@ -293,6 +295,77 @@ public static class DepositEndpoints
         .WithTags("Deposits")
         .WithSummary("Confirmar depósito manualmente (Solo Finanzas/Admin)")
         .WithDescription("Confirma manualmente un depósito validado. Solo roles: finanzas, admin.");
+
+        // POST: Rechazar depósito (finanzas/admin)
+        group.MapPost("/{id:guid}/reject", async (
+            Guid id,
+            HttpContext http,
+            [FromBody] RejectDepositRequest request,
+            AppDbContext context,
+            ISignalRNotificationService notifications,
+            IFCMNotificationService fcm,
+            IChatService chat,
+            ILogger<Program> logger
+        ) =>
+        {
+            var userId = GetUserId(http);
+
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+            
+            var deposit = await context.Depositos
+                .Include(d => d.Empresa)
+                .Include(d => d.Sucursal)
+                .Include(d => d.Banco)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado. "});
+
+            if (deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId)
+            {
+                return Results.BadRequest(new { error = "No puedes confirmar este depósito porque está siendo validado por otro usuario." });
+            }
+
+            if (deposit.Estado != DepositStates.Procesado)
+            {
+                return Results.BadRequest(new
+                {
+                    error = $"Solo se pueden confirmar depósitos en estado '{DepositStates.Procesado}'",
+                    estadoActual = deposit.Estado
+                });
+            }
+
+            var oldStatus = deposit.Estado;
+            deposit.Estado = DepositStates.Rechazado;
+            deposit.ValidadoPor = userId;
+            deposit.Observaciones = request.Observaciones;
+
+            await context.SaveChangesAsync();
+
+            await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito ha sido rechazado.");
+
+            await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, deposit.Observaciones);
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);
+
+            var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
+            if (vendedor?.FcmToken != null)
+            {
+                try
+                {
+                    await fcm.SendDepositRejectedAsync(vendedor.FcmToken, deposit.Observaciones);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Error enviando FCM, pero depósito rechazado");
+                }
+            }
+
+            return Results.Ok(new RejectDepositResponse(true, "Depósito rechazado exitosamente"));
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Rechazar depósito manualmente");
         
         // PUT: Regularizar depósito rechazado
         group.MapPut("/{id:guid}/regularize", async (
@@ -392,7 +465,7 @@ public static class DepositEndpoints
         }).RequireAuthorization().WithSummary("Comprobar depósitos duplicados");
 
         // POST: Bloquear depósito (Lock)
-        group.MapPost("/{id:guid}/lock", async (Guid id, HttpContext http, AppDbContext context) =>
+        group.MapPost("/{id:guid}/lock", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications) =>
         {
             var userId = GetUserId(http);
             var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
@@ -400,19 +473,34 @@ public static class DepositEndpoints
 
             if (deposit.Estado != DepositStates.Procesado)
             {
-                return Results.BadRequest(new { error = "El depósito ya está siendo revisado por otro usuario." });
+                return Results.BadRequest(new { error = $"Solo se pueden tomar depósitos en estado '{DepositStates.Procesado}'", estadoActual = deposit.Estado });
+            }
+
+            if (deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId)
+            {
+                var validador = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.ValidadoPor.Value);
+
+                return Results.Conflict(new
+                {
+                    error = "Este depósito ya está siendo validado por otro usuario.",
+                    validadoPor = deposit.ValidadoPor,
+                    validadoPorNombre = validador?.FullName
+                });
             }
 
             deposit.ValidadoPor = userId;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync();
 
+            var yo = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            await notifications.NotifyPanelDepositLocked(id, userId, yo?.FullName);
+
             // Notificación vía SignalR si deseas que los demás vean el candado en tiempo real
             return Results.Ok(new { success = true });
         }).RequireAuthorization();
 
         // POST: Desbloquear depósito (Unlock)
-        group.MapPost("/{id:guid}/unlock", async (Guid id, HttpContext http, AppDbContext context) =>
+        group.MapPost("/{id:guid}/unlock", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications) =>
         {
             var userId = GetUserId(http);
             var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
@@ -422,6 +510,7 @@ public static class DepositEndpoints
             {
                 deposit.ValidadoPor = null;
                 await context.SaveChangesAsync();
+                await notifications.NotifyPanelDepositUnlocked(id);
             }
             return Results.Ok(new { success = true });
         }).RequireAuthorization();

@@ -64,7 +64,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:4173").AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        policy.WithOrigins("http://localhost:5173", "http://localhost:4173", "https://portal.tyresperu.com").AllowAnyHeader().AllowAnyMethod().AllowCredentials();
     });
 });
 
@@ -111,6 +111,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
+    await next();
+});
 
 if (app.Environment.IsDevelopment())
 {

@@ -46,8 +46,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: api-bridge
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
@@ -190,7 +190,7 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
-
+# ===== Cady Proxy =====
   reverse-proxy:
     image: caddy:2-alpine
     container_name: caddy-proxy
@@ -205,6 +205,25 @@ services:
       - caddy-config:/config
     depends_on:
       - api-bridge
+    networks:
+      - confirmo-network
+    restart: unless-stopped
+
+# ===== Frontend Vite =====
+  fronted:
+    build:
+      context: ../fronted
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: https://n5vqr8.tyresperu.com
+        VITE_SIGNALR_HUB_URL: wss://n5vqr8.tyresperu.com/hubs/deposits
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_GOOGLE_API_KEY: ${VITE_GOOGLE_API_KEY}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
+    container_name: fronted
+    expose:
+      - "80"
     networks:
       - confirmo-network
     restart: unless-stopped

@@ -1,3 +1,7 @@
 {$DOMAIN} {
     reverse_proxy api-bridge:8080
 }
+
+{$DOMAIN_FRONTED} {
+    reverse_proxy fronted:80
+}

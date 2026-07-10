@@ -14,14 +14,31 @@ public record DepositConfirmedNotification(
     string Moneda
 );
 
+public record DepositRejectedNotification(
+    Guid DepositId,
+    string Estado,
+    string Observaciones
+);
+
 public record ConfirmDepositRequest(
-    string? Observaciones
+    string? Observaciones,
+    string? Anexo
+);
+
+public record RejectDepositRequest(
+    string Observaciones,
+    string? Anexo
 );
 
 public record ConfirmDepositResponse(
     bool Success,
     string Message,
     DepositConfirmedNotification? Notification
+);
+
+public record RejectDepositResponse(
+    bool Success,
+    string Message
 );
 
 // Panel Voucher (nuevo)

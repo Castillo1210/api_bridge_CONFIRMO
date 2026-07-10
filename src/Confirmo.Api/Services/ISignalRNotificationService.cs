@@ -31,6 +31,8 @@ public interface ISignalRNotificationService
     Task NotifyPanelNewDeposit(PanelDepositSummary deposit);
     Task NotifyPanelDepositStatusChanged(Guid depositId, string newStatus, string oldStatus);
     Task NotifyPanelStatsUpdate(string group, PanelStatsUpdate stats);
+    Task NotifyPanelDepositLocked(Guid depositId, Guid validateBy, string? validateByName);
+    Task NotifyPanelDepositUnlocked(Guid depositId);
 
     // Sistema
     Task NotifyConnectionStatus(Guid userId, string status, string? message = null);
