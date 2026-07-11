@@ -139,20 +139,30 @@ public class WorkerResultConsumer : BackgroundService
 
                 await db.SaveChangesAsync();
 
-                var successMessage = "Tu depósito fue procesado exitosamente. Esperando confirmación de finanzas.";
+                var successMessageChat = await RenderPlantillaAsync("deposito_procesado", "chat");
+                var warningMessageChat = await RenderPlantillaAsync("fecha_antigua", "chat");
+
+                var successMessagePush = await RenderPlantillaAsync("depsoito_procesado", "push");
+                var warningMessagePush = await RenderPlantillaAsync("fecha_antigua", "push");
 
                 var alreadyHasMessage = await db.DepositMessages
                     .AnyAsync(m => m.DepositId == deposit.Id && m.Content == successMessage);
 
                 if (!alreadyHasMessage)
                 {
-                    await chat.AddSystemMessageAsync(deposit.Id, "Tu depósito fue procesado exitosamente. Esperando confirmación de finanzas.");
+                    if (deposit.Condicion == "antiguo")
+                    {
+                        await chat.AddSystemMessageAsync(deposit.Id, errorMessage);
+                    }
+                    else
+                    {
+                        await chat.AddSystemMessageAsync(deposit.Id, successMessage);
+                    }
                 }
 
-                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id,
-                    "Tu depósito fue procesado. Esperando confirmación");
+                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, successMessage);
 
-                //await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Procesado, oldStatus);
+                await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Procesado, oldStatus);
             }
         }
         

@@ -29,6 +29,7 @@ public record DepositResponse(
     string Estado,
     string? Observaciones,
     string? MotivoRechazo,
+    bool Risk,
     DateTimeOffset? FechaValidacion,
     Guid? ValidadoPor,
     Guid? EmpresaId,

@@ -591,7 +591,7 @@ public static class DepositEndpoints
         return new DepositResponse(
             d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
             d.ImagenVoucher, imageUrl,d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
-            d.Estado, d.Observaciones, d.MotivoRechazo, d.FechaValidacion, d.ValidadoPor,
+            d.Estado, d.Observaciones, d.MotivoRechazo, d.Risk, d.FechaValidacion, d.ValidadoPor,
             d.EmpresaId, d.BancoId, d.SucursalId, d.TrabajadorId, d.TrabajadorId,
             d.ReferenciaCliente, d.DatosOcr, d.RucCliente, d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null,
             d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,

@@ -125,11 +125,11 @@ public class ChatService : IChatService
         return new VendedorChatHistoryResponse(items, hasMore);
     }
 
-    public async Task<string> RenderPlantillaAsync(string codigo, Dictionary<string, string?> valores)
+    public async Task<string> RenderPlantillaAsync(string codigo, string canal, Dictionary<string, string?> valores)
     {
-        var plantilla = await _context.PlantillasMensajesSistema.AsNoTracking().FirstOrDefaultAsync(p => p.Codigo == codigo && p.Activo);
+        var plantilla = await _context.PlantillasMensajesSistema.AsNoTracking().FirstOrDefaultAsync(p => p.Codigo == codigo && p.Canal == canal && p.Activo);
 
-        var contenido = plantilla?.Contenido ?? $"[Falta configurar la plantilla '{codigo}']";
+        var contenido = plantilla?.Contenido ?? $"[Falta configurar la plantilla '{codigo}' para el canal '{canal}']";
 
         foreach (var (token, valor) in valores)
         {
