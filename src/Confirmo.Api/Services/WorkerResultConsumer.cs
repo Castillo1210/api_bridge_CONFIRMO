@@ -139,30 +139,34 @@ public class WorkerResultConsumer : BackgroundService
 
                 await db.SaveChangesAsync();
 
-                var successMessageChat = await RenderPlantillaAsync("deposito_procesado", "chat");
-                var warningMessageChat = await RenderPlantillaAsync("fecha_antigua", "chat");
+                var placeholders = ChatService.BuildDepositPlaceholders(deposit);
 
-                var successMessagePush = await RenderPlantillaAsync("depsoito_procesado", "push");
-                var warningMessagePush = await RenderPlantillaAsync("fecha_antigua", "push");
+                var successMessageChat = await chat.RenderPlantillaAsync("deposito_procesado", "chat", placeholders);
+                var warningMessageChat = await chat.RenderPlantillaAsync("fecha_antigua", "chat", placeholders);
+
+                var successMessagePush = await chat.RenderPlantillaAsync("deposito_procesado", "push", placeholders);
+                var warningMessagePush = await chat.RenderPlantillaAsync("fecha_antigua", "push", placeholders);
+
+                var esAntiguo = deposit.Condicion == "antiguo";
+                var mensajeChat = esAntiguo ? warningMessageChat : successMessageChat;
+                var mensajePush = esAntiguo ? warningMessagePush : successMessagePush;
 
                 var alreadyHasMessage = await db.DepositMessages
-                    .AnyAsync(m => m.DepositId == deposit.Id && m.Content == successMessage);
+                    .AnyAsync(m => m.DepositId == deposit.Id && m.Content == mensajeChat);
 
                 if (!alreadyHasMessage)
                 {
-                    if (deposit.Condicion == "antiguo")
-                    {
-                        await chat.AddSystemMessageAsync(deposit.Id, errorMessage);
-                    }
-                    else
-                    {
-                        await chat.AddSystemMessageAsync(deposit.Id, successMessage);
-                    }
+                    await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
                 }
 
-                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, successMessage);
-
+                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, mensajeChat);
                 await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Procesado, oldStatus);
+
+                var vendedor = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
+                if (vendedor?.FcmToken != null)
+                {
+                    await fcm.SendProcessingAsync(vendedor.FcmToken, mensajePush);
+                }
             }
         }
         

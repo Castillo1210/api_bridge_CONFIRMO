@@ -256,9 +256,10 @@ public static class DepositEndpoints
             await context.SaveChangesAsync();
 
             var placeholders = ChatService.BuildDepositPlaceholders(deposit);
-            var mensaje = await chat.RenderPlantillaAsync("deposito_confirmado", placeholders);
+            var mensajeChat = await chat.RenderPlantillaAsync("deposito_confirmado", "chat", placeholders);
+            var mensajePush = await chat.RenderPlantillaAsync("deposito_confirmado", "push", placeholders);
 
-            await chat.AddSystemMessageAsync(deposit.Id, mensaje);
+            await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
 
             var notification = new DepositConfirmedNotification(
                 DepositId: deposit.Id,
@@ -282,7 +283,7 @@ public static class DepositEndpoints
             {
                 try 
                 {
-                    await fcm.SendDepositConfirmedAsync(vendedor.FcmToken, notification);
+                    await fcm.SendDepositConfirmedAsync(vendedor.FcmToken, notification, body: mensajePush);
                 }
                 catch (Exception ex)
                 {
@@ -347,9 +348,10 @@ public static class DepositEndpoints
             await context.SaveChangesAsync();
 
             var placeholders = ChatService.BuildDepositPlaceholders(deposit, request.Observaciones);
-            var mensaje = await chat.RenderPlantillaAsync("deposito_rechazado", placeholders);
+            var mensajeChat = await chat.RenderPlantillaAsync("deposito_rechazado", "chat", placeholders);
+            var mensajePush = await chat.RenderPlantillaAsync("deposito_rechazado", "push", placeholders);
 
-            await chat.AddSystemMessageAsync(deposit.Id, mensaje);
+            await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
 
             await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, deposit.Observaciones);
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);
@@ -359,7 +361,7 @@ public static class DepositEndpoints
             {
                 try
                 {
-                    await fcm.SendDepositRejectedAsync(vendedor.FcmToken, deposit.Observaciones);
+                    await fcm.SendDepositRejectedAsync(vendedor.FcmToken, deposit.Observaciones, body: mensajePush);
                 }
                 catch (Exception ex)
                 {
@@ -591,7 +593,7 @@ public static class DepositEndpoints
         return new DepositResponse(
             d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro,
             d.ImagenVoucher, imageUrl,d.Anexo, d.NumeroOperacionBanco, d.FechaDeposito,
-            d.Estado, d.Observaciones, d.MotivoRechazo, d.Risk, d.FechaValidacion, d.ValidadoPor,
+            d.Estado, d.Observaciones, d.MotivoRechazo, d.Riesgo, d.FechaValidacion, d.ValidadoPor,
             d.EmpresaId, d.BancoId, d.SucursalId, d.TrabajadorId, d.TrabajadorId,
             d.ReferenciaCliente, d.DatosOcr, d.RucCliente, d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null,
             d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,

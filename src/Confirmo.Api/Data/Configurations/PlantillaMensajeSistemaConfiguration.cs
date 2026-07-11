@@ -8,7 +8,7 @@ public class PlantillaMensajeSistemaConfiguration : IEntityTypeConfiguration<Pla
 {
     public void Configure(EntityTypeBuilder<PlantillaMensajeSistema> builder)
     {
-        builder.ToTable("plantillas_mensajees_sistema", "public");
+        builder.ToTable("plantillas_mensajes_sistema", "public");
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).HasDefaultValueSql("gen_random_uuid()");
 

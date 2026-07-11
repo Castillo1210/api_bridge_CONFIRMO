@@ -8,7 +8,7 @@ public class VendedorMessageConfiguration : IEntityTypeConfiguration<VendedorMes
 {
     public void Configure(EntityTypeBuilder<VendedorMessage> builder)
     {
-        builder.ToTable("vendedor_message", "public");
+        builder.ToTable("vendedor_messages", "public");
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).HasDefaultValueSql("gen_random_uuid()");
 

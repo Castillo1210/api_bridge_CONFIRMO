@@ -11,5 +11,5 @@ public interface IChatService
     Task<VendedorChatHistoryResponse> GetVendedorHistoryAsync(Guid vendedorId, DateTimeOffset? before = null, int limit = 50);
     Task<VendedorMessageResponse> AddVendedorMessageAsync(Guid vendedorId, string senderType, Guid? senderId, string content, string messageType = "text");
 
-    Task<string> RenderPlantillaAsync(string codigo, Dictionary<string, string?> valores);
+    Task<string> RenderPlantillaAsync(string codigo, string canal, Dictionary<string, string?> valores);
 }

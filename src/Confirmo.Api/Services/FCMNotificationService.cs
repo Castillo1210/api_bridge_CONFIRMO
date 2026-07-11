@@ -9,8 +9,8 @@ namespace Confirmo.Api.Services;
 public interface IFCMNotificationService
 {
     Task SendNotificationAsync(string fcmToken, string title, string body, Dictionary<string, string>? data = null);
-    Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification);
-    Task SendDepositRejectedAsync(string fcmToken, string reason);
+    Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification, string? title = null, string? body = null);
+    Task SendDepositRejectedAsync(string fcmToken, string reason, string? title = null, string? body = null);
     Task SendProcessingAsync(string fcmToken, string message);
 }
 
@@ -93,10 +93,10 @@ public class FCMNotificationService : IFCMNotificationService
         }
     }
 
-    public async Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification)
+    public async Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification, string? title = null, string? body = null)
     {
-        var title = "🎉 Depósito Confirmado";
-        var body = $"{notification.Empresa} - {notification.Importe} {notification.Moneda}";
+        var finalTitle = title ?? "🎉 Depósito Confirmado";
+        var finalBody = body ?? $"{notification.Empresa} - {notification.Importe} {notification.Moneda}";
 
         var data = new Dictionary<string, string>
         {
@@ -113,15 +113,15 @@ public class FCMNotificationService : IFCMNotificationService
             ["moneda"] = notification.Moneda
         };
 
-        await SendNotificationAsync(fcmToken, title, body, data);
+        await SendNotificationAsync(fcmToken, finalTitle, finalBody, data);
     }
 
-    public async Task SendDepositRejectedAsync(string fcmToken, string reason)
+    public async Task SendDepositRejectedAsync(string fcmToken, string reason, string? title = null, string? body = null)
     {
-        var title = "✖️ Depósito Rechazado";
-        var body = $"Tu depósito ha sido rechazado: {reason}";
+        var finalTitle = title ?? "✖️ Depósito Rechazado";
+        var finalBody = body ?? $"Tu depósito ha sido rechazado: {reason}";
 
-        await SendNotificationAsync(fcmToken, title, body);
+        await SendNotificationAsync(fcmToken, finalTitle, finalBody);
     }
 
     public async Task SendProcessingAsync(string fcmToken, string message)
