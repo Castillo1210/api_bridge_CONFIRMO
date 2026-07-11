@@ -219,14 +219,14 @@ public class SignalRNotificationService : ISignalRNotificationService
 
     public async Task NotifyVendedorChatMessage(VendedorMessageResponse message)
     {
+        await _hub.Clients.User(message.VendedorId.ToString()).SendAsync("ChatMessage", message);
+
         var payload = new
         {
             message,
             vendedorId = message.VendedorId,
             timestamp = DateTimeOffset.UtcNow
         };
-
-        await _hub.Clients.User(message.VendedorId.ToString()).SendAsync("ChatMessage", payload);
 
         await _hub.Clients.Group(PANEL_GROUP).SendAsync("ChatMessage", payload);
         await _hub.Clients.Group(FINANCE_GROUP).SendAsync("ChatMessage", payload);

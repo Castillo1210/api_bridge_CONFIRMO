@@ -42,6 +42,7 @@ public static class VendedorChatEndpoints
             var type = string.IsNullOrEmpty(request.MessageType) ? "text" : request.MessageType;
 
             var message = await chat.AddVendedorMessageAsync(vendedorId, senderType, userId, request.Content ?? "", type);
+            return Results.Ok(message);
         });
     }
 
