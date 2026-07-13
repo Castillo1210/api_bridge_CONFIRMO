@@ -109,6 +109,44 @@ public class WorkerResultConsumer : BackgroundService
         if (result.Status is "error_ia" or "error")
         {
             _logger.LogInformation("Depósito {DepositId}: IA falló ({Status}), se mantiene procesado", result.DepositId, result.Status);
+
+            var ruleResult = ApplyBusinessRules(deposit);
+
+            deposit.Estado = DepositStates.Procesado;
+            deposit.Condicion = ruleResult.Condition;
+            deposit.Riesgo = true;
+            deposit.Observaciones = "No se pudo extraer la información automáticamente del voucher, Completá y verificá los datos manualmente antes de confirmar.";
+
+            await db.SaveChangesAsync();
+
+            var placeholders = ChatService.BuildDepositPlaceholders(deposit, deposit.Observaciones);
+            var mensajeChat = await chat.RenderPlantillaAsync("deposito_procesado", "chat", placeholders);
+            var mensajePush = await chat.RenderPlantillaAsync("deposito_procesado", "push", placeholders);
+
+            var alreadyHasMessage = await db.DepositMessages.AnyAsync(m => m.DepositId == deposit.Id && m.Content == mensajeChat);
+
+            if (!alreadyHasMessage)
+            {
+                await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
+            }
+
+            await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, mensajeChat);
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Procesado, oldStatus);
+
+            var vendedor = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
+
+            if (vendedor?.FcmToken != null)
+            {
+                try
+                {
+                    await fcm.SendProcessingAsync(vendedor.FcmToken, mensajePush);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error enviando FCM de fallo de procesamiento para depósito");
+                }
+            }
+
             return;
         }
         

@@ -23,12 +23,20 @@ public class StorageService : IStorageService
 
     public async Task<string> UploadVoucherAsync(Guid empresaId, Guid vendedorId, byte[] imageBytes, string contentType)
     {
-        var objectName = $"{empresaId}/{vendedorId}/{Guid.NewGuid()}.jpg";
+        var extension = contentType switch
+        {
+            "application/pdf" => "pdf",
+            "image/png" => "png",
+            "image/webp" => "webp",
+            _ => "jpg"
+        };
+
+        var objectName = $"{empresaId}/{vendedorId}/{Guid.NewGuid()}.{extension}";
 
         using var stream = new MemoryStream(imageBytes);
         await _client.UploadObjectAsync(_bucketName, objectName, contentType, stream);
 
-        _logger.LogInformation("Voucher subido a GCS: {ObjectName}", objectName);
+        _logger.LogInformation("Voucher subido a GCS: {ObjectName} ({ContentType})", objectName, contentType);
         return objectName;
     }
 

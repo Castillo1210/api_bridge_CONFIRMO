@@ -35,7 +35,7 @@ public static class DepositEndpoints
             if (error != null) return Results.BadRequest(new { error }); 
 
             // 1. Subir a GCS
-            var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  "image/jpeg");
+            var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  DetectContentType(imageBytes));
 
             var trabajador = await context.Trabajadores.AsNoTracking().FirstOrDefaultAsync(t => t.ProfileId == userId && t.Activo);
 
@@ -102,7 +102,7 @@ public static class DepositEndpoints
                         continue;
                     }
                     
-                    var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
+                    var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
 
                     var trabajador = await context.Trabajadores.AsNoTracking().FirstOrDefaultAsync(t => t.ProfileId == userId && t.Activo);
 
@@ -429,7 +429,7 @@ public static class DepositEndpoints
                 return Results.BadRequest(new { error = "ImagenBase64 inválida" });
             }
 
-            var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, "image/jpeg");
+            var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
 
             var oldStatus = deposit.Estado;
             deposit.ImagenVoucher = objectName;
@@ -616,6 +616,23 @@ public static class DepositEndpoints
             d.Sucursal != null ? new SucursalResponse(d.Sucursal.Id, d.Sucursal.EmpresaId, d.Sucursal.Nombre, d.Sucursal.Direccion, d.Sucursal.Activo) : null,
             d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null
         );
+    }
+
+    private static string DetectContentType(byte[] bytes)
+    {
+        if (bytes.Length >= 4 && bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46)
+            return "application/pdf";
+
+        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+        return "image/jpeg";
+
+        if (bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+            return "image/png";
+
+        if (bytes.Length >= 4 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46)
+            return "image/webp";
+
+        return "image/jpeg";
     }
 }
 
