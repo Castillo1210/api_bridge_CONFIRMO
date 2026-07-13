@@ -78,8 +78,10 @@ services:
       - InternalSecret=${INTERNAL_SECRET}
       # Firebase FCM
       - Firebase__ProjectId=${FIREBASE_PROJECT_ID}
+      - Firebase__CredentialsPath=/secrets/firebase-sa.json
     volumes:
         - ./secrets/sa-key.json:/secrets/sa-key.json:ro
+        - ./secrets/firebase-sa.json:/secrets/firebase-sa.json:ro
     depends_on:
       redis:
         condition: service_healthy

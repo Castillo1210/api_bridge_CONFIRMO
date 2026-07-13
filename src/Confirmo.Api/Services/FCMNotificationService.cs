@@ -3,6 +3,7 @@ using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
+using Google.Apis.Auth.OAuth2;
 
 namespace Confirmo.Api.Services;
 
@@ -28,19 +29,18 @@ public class FCMNotificationService : IFCMNotificationService
             if (FirebaseApp.DefaultInstance == null)
             {
                 var projectId = config["Firebase:ProjectId"];
+                var credentialsPath = config["Firebase:CredentialsPath"];
 
-                if (!string.IsNullOrEmpty(projectId))
+                var credential = !string.IsNullOrEmpty(credentialsPath) && File.Exists(credentialsPath) 
+                    ? CredentialFactory.FromFile(credentialsPath, JsonCredentialParameters.ServiceAccountCredentialType)
+                    : GoogleCredential.GetApplicationDefault();
+
+                
+                FirebaseApp.Create(new AppOptions 
                 {
-                    FirebaseApp.Create(new AppOptions 
-                    {
-                        Credential = Google.Apis.Auth.OAuth2.GoogleCredential.GetApplicationDefault(), 
-                        ProjectId = projectId 
-                    });
-                }
-                else
-                {
-                    FirebaseApp.Create();
-                }
+                    Credential = credential, 
+                    ProjectId = string.IsNullOrEmpty(projectId) ? null : projectId 
+                });
             }
 
             _initialzed = true;
