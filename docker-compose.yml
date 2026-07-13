@@ -104,6 +104,7 @@ services:
     build:
       context: ../api-worker/python-worker
       dockerfile: Dockerfile
+    image: confirmo/python-worker:latest
     container_name: python-api
     ports:
       - "8081:8081"
@@ -152,6 +153,7 @@ services:
     build:
       context: ../api-worker/python-worker # Se usa la misma imagen que la API
       dockerfile: Dockerfile
+    image: confirmo/python-worker:latest
     container_name: python-celery-worker
     command: celery -A app.worker.celery_app worker -Q deposit_processing --loglevel=info
     environment:
