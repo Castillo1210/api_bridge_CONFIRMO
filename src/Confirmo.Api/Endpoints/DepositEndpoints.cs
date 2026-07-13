@@ -152,12 +152,22 @@ public static class DepositEndpoints
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
             var userId = GetUserId(http);
-            var deposit = await context.Depositos
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            var isFinanceOrAdmin = user != null && (user.Rol == "finanzas" || user.Rol == "admin");
+
+            var query = context.Depositos
                 .Include(d => d.Empresa)
                 .Include(d => d.Banco)
                 .Include(d => d.Sucursal)
                 .Include(d => d.Trabajador)
-                .AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && d.VendedorId == userId);
+                .AsNoTracking().Where(d => d.Id == id);
+
+            if (!isFinanceOrAdmin)
+            {
+                query = query.Where(d => d.VendedorId == userId);
+            }
+
+            var deposit = await query.FirstOrDefaultAsync();
 
             return deposit is not null ? Results.Ok(await MapToResponseAsync(deposit, storage)) : Results.NotFound();
         });
@@ -176,8 +186,14 @@ public static class DepositEndpoints
             [FromQuery] int pageSize = 20) =>
         {
             var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            var isFinanceOrAdmin = user != null && (user.Rol == "finanzas" || user.Rol == "admin");
 
-            var query = context.Depositos.AsNoTracking().Where(d => d.VendedorId == userId);
+            var query = context.Depositos.AsNoTracking().AsQueryable();
+            if (!isFinanceOrAdmin)
+            {
+                query = query.Where(d => d.VendedorId == userId);
+            }
 
             if (!string.IsNullOrEmpty(cliente))
             {
