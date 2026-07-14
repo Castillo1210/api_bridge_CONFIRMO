@@ -189,7 +189,7 @@ public static class DepositEndpoints
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             var isFinanceOrAdmin = user != null && (user.Rol == "finanzas" || user.Rol == "admin");
 
-            var query = context.Depositos.AsNoTracking().AsQueryable();
+            var query = context.Depositos.Include(d => d.Empresa).Include(d => d.Banco).AsNoTracking().AsQueryable();
             if (!isFinanceOrAdmin)
             {
                 query = query.Where(d => d.VendedorId == userId);
@@ -218,7 +218,9 @@ public static class DepositEndpoints
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
-                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo, d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.BancoId, d.TrabajadorId, d.ValidadoPor)).ToListAsync();
+                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo, 
+                    d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor,
+                    d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });

@@ -61,8 +61,11 @@ public record DepositListResponse(
     DateOnly? FechaDeposito,
     Guid? SucursalId,
     Guid? BancoId,
+    Guid? EmppresaId,
     Guid? TrabajadorId,
-    Guid? ValidadoPor
+    Guid? ValidadoPor,
+    EmpresaResponse? Empresa = null,
+    BancoResponse? Banco = null
 );
 
 public record DepositListPagedResponse(
