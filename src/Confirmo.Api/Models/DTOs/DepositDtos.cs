@@ -55,6 +55,8 @@ public record DepositListResponse(
     string Moneda,
     DateTimeOffset FechaRegistro,
     string Estado,
+    string? Condicion,
+    bool Riesgo,
     string? NumeroOperacionBanco,
     DateOnly? FechaDeposito,
     Guid? SucursalId,

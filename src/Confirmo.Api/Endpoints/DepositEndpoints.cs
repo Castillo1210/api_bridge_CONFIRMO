@@ -218,7 +218,7 @@ public static class DepositEndpoints
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
-                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.BancoId, d.TrabajadorId, d.ValidadoPor)).ToListAsync();
+                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo, d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.BancoId, d.TrabajadorId, d.ValidadoPor)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
