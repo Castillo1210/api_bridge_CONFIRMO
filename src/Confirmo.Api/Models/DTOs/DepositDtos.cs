@@ -59,6 +59,7 @@ public record DepositListResponse(
     bool Riesgo,
     string? NumeroOperacionBanco,
     DateOnly? FechaDeposito,
+    string? ImagenVoucher,
     Guid? SucursalId,
     Guid? BancoId,
     Guid? EmppresaId,

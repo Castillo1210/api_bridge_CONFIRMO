@@ -219,7 +219,7 @@ public static class DepositEndpoints
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
                     d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo, 
-                    d.NumeroOperacionBanco, d.FechaDeposito, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor,
+                    d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor,
                     d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
