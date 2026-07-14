@@ -4,7 +4,8 @@ public record LoginRequest(
     string? PhoneNumber = null,
     string? Email = null, 
     string Password = "", 
-    string? FcmToken = null
+    string? FcmToken = null,
+    string? DeviceId = null
 );
 
 public record LoginResponse(string AccessToken, string RefreshToken, int ExpiresInSeconds, UserInfo User);

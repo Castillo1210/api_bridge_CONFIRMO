@@ -14,9 +14,29 @@ public static class AuthEndpoints
 
         group.MapPost("/login", async (LoginRequest request, IAuthService auth) =>
         {
-            var result = await auth.LoginAsync(request);
-            return result is not null ? Results.Ok(result) : Results.Unauthorized();
+            var outcome = await auth.LoginAsync(request);
+            return outcome.Failure switch
+            {
+                LoginFailure.None => Results.Ok(outcome.Response),
+                LoginFailure.DeviceMismatch => Results.Json(
+                    new { message = "Ya hay una sesion activa en otro dispositivo. Cierra sesion en ese dispositivo primero para continuar."},
+                    statusCode: 409
+                ),
+                _ => Results.Unauthorized()
+            };
         });
+
+        group.MapPost("/logout", async (HttpContext http, IAuthService auth) =>
+        {
+            var userIdClaim = http.User.FindFirst("sub") ?? http.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            await auth.LogoutAsync(userId);
+            return Results.Ok(new { success = true });
+        }).RequireAuthorization();
 
         group.MapPost("/refresh", async (RefreshRequest request, IAuthService auth) =>
         {

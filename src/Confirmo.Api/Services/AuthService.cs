@@ -54,7 +54,7 @@ public class AuthService : IAuthService
         return new ChangePasswordResponse(true, "Contraseña actualizado correctamente");
     }
 
-    public async Task<LoginResponse?> LoginAsync(LoginRequest request)
+    public async Task<LoginOutcome> LoginAsync(LoginRequest request)
     {
         Profile? user = null;
 
@@ -70,7 +70,7 @@ public class AuthService : IAuthService
         if (user == null)
         {
             _logger.LogWarning("Login fallido");
-            return null;
+            return new LoginOutcome(null, LoginFailure.InvalidCredentials);
         }
 
         var hashNativo = HashPassword(request.Password);
@@ -80,7 +80,25 @@ public class AuthService : IAuthService
         if (!VerifyPassword(request.Password, user.PasswordHash))
         {
             _logger.LogWarning("Contraseña incorrecta para {Identifier}", request.Email ?? request.PhoneNumber);
-            return null; // Si no coincide, rechaza el login de inmediato
+            return new LoginOutcome(null, LoginFailure.InvalidCredentials); // Si no coincide, rechaza el login de inmediato
+        }
+
+        var esVendedor = string.Equals(user.Rol, "vendedor", StringComparison.OrdinalIgnoreCase);
+        if (esVendedor && !string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            var hayOtroDispositivoActivo = !string.IsNullOrWhiteSpace(user.DeviceId) && !string.Equals(user.DeviceId, request.DeviceId, StringComparison.Ordinal);
+
+            if (hayOtroDispositivoActivo)
+            {
+                _logger.LogWarning("Login bloqueado por DeviceId distinto para {Identifier}", request.Email ?? request.PhoneNumber);
+                return new LoginOutcome(null, LoginFailure.DeviceMismatch);
+            }
+
+            if (request.DeviceId != user.DeviceId)
+            {
+                user.DeviceId = request.DeviceId;
+                _context.Entry(user).Property(x => x.DeviceId).IsModified = true;
+            }
         }
 
         if (!string.IsNullOrEmpty(request.FcmToken) && request.FcmToken != user.FcmToken)
@@ -91,7 +109,6 @@ public class AuthService : IAuthService
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
         _context.Entry(user).Property(x => x.LastLoginAt).IsModified = true;
-
         _context.Entry(user).Property(x => x.PasswordHash).IsModified = false;
 
         await _context.SaveChangesAsync();
@@ -99,12 +116,22 @@ public class AuthService : IAuthService
         var accessToken = GenerateAccessToken(user);
         var refreshToken = GenerateRefreshToken();
 
-        return new LoginResponse(
-            accessToken,
-            refreshToken,
-            _config.GetValue<int>("Jwt:AccessTokenHours") * 3600,
-            new UserInfo(user.Id, user.PhoneNumber, user.Email, user.FullName, user.EmpresaId, user.SucursalId, user.FcmToken)
+        return new LoginOutcome( 
+            new LoginResponse(
+                accessToken,
+                refreshToken,
+                _config.GetValue<int>("Jwt:AccessTokenHours") * 3600,
+                new UserInfo(user.Id, user.PhoneNumber, user.Email, user.FullName, user.EmpresaId, user.SucursalId, user.FcmToken)  
+            ), LoginFailure.None
         );
+    }
+
+    public async Task LogoutAsync(Guid userId)
+    {
+        var user = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == userId);
+        if (user == null) return;
+        user.DeviceId = null;
+        await _context.SaveChangesAsync();
     }
 
     public async Task<RefreshResponse?> RefreshAsync(string refreshToken)
@@ -183,3 +210,6 @@ public class AuthService : IAuthService
         }
     }
 }
+
+public enum LoginFailure { None, InvalidCredentials, DeviceMismatch }
+public record LoginOutcome(LoginResponse? Response, LoginFailure Failure);

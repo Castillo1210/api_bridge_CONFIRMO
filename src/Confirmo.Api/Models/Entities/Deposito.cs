@@ -54,6 +54,7 @@ public class Profile
     public string Rol { get; set; } = "vendedor";
     public bool Activo { get; set; } = true;
     public string? FcmToken { get; set; }
+    public string? DeviceId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
 

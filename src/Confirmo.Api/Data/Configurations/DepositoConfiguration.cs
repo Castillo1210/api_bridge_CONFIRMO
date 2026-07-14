@@ -83,6 +83,7 @@ public class ProfileConfiguration : IEntityTypeConfiguration<Profile>
         builder.Property(p => p.FullName).IsRequired().HasMaxLength(200);
         builder.Property(p => p.Rol).HasMaxLength(55);
         builder.Property(p => p.FcmToken).HasMaxLength(500);
+        builder.Property(p => p.DeviceId).HasMaxLength(200);
 
         builder.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId)
             .OnDelete(DeleteBehavior.Restrict);

@@ -6,7 +6,8 @@ namespace Confirmo.Api.Services;
 
 public interface IAuthService
 {
-    Task<LoginResponse?> LoginAsync(LoginRequest request);
+    Task<LoginOutcome> LoginAsync(LoginRequest request);
+    Task LogoutAsync(Guid userId);
     Task<RefreshResponse?> RefreshAsync(string refreshToken);
     string GenerateAccessToken(Profile user);
     string GenerateRefreshToken();
