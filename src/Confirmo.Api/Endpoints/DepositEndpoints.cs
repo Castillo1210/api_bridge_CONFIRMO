@@ -6,6 +6,7 @@ using Confirmo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 
 namespace Confirmo.Api.Endpoints;
 
@@ -16,7 +17,7 @@ public static class DepositEndpoints
         var group = app.MapGroup("/api/v1/deposits")
             .RequireAuthorization()
             .WithTags("Deposits");
-        
+
         // POST: Crear depósito único
         group.MapPost("/", async (
             [FromForm] DepositCreateRequest request,
@@ -32,7 +33,7 @@ public static class DepositEndpoints
             if (user == null) return Results.Unauthorized();
 
             var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
-            if (error != null) return Results.BadRequest(new { error }); 
+            if (error != null) return Results.BadRequest(new { error });
 
             // 1. Subir a GCS
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes,  DetectContentType(imageBytes));
@@ -69,7 +70,7 @@ public static class DepositEndpoints
         })
         .DisableAntiforgery()
         .Accepts<DepositCreateRequest>("multipart/form-data");
-        
+
         // Post: crear VARIOS depósitos (batch)
         group.MapPost("/batch", async (
             [FromBody] BatchDepositsRequest request,
@@ -87,7 +88,7 @@ public static class DepositEndpoints
 
             if (request.Items.Count == 0)
                 return Results.BadRequest(new { error = "La lista de vouchers no puede estar vacía " });
-    
+
             var results = new List<object>();
 
             using var transaction = await context.Database.BeginTransactionAsync();
@@ -101,7 +102,7 @@ public static class DepositEndpoints
                         results.Add(new { index = results.Count, error });
                         continue;
                     }
-                    
+
                     var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
 
                     var trabajador = await context.Trabajadores.AsNoTracking().FirstOrDefaultAsync(t => t.ProfileId == userId && t.Activo);
@@ -147,7 +148,7 @@ public static class DepositEndpoints
         .RequireAuthorization()
         .WithSummary("Crear múltiples depósitos en lote")
         .WithDescription("Recibe una lista de vouchers, los sube a GCS, los registra en BD y los encola para procesamiento.");
-        
+
         // GET: un depósito
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
@@ -194,7 +195,7 @@ public static class DepositEndpoints
             var signedUrl = await storage.GetSignedUrlAsync(deposit.ImagenVoucher);
             return Results.Redirect(signedUrl);
         });
-        
+
         // GET: Listar depósitos
         group.MapGet("/", async (
             HttpContext http,
@@ -241,13 +242,13 @@ public static class DepositEndpoints
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
-                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo, 
+                    d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Condicion, d.Riesgo,
                     d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor,
-                    d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null)).ToListAsync();
+                    d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
-        
+
         // POST: Confirmar depósito (finanzas/admin)
         group.MapPost("/{id:guid}/confirm", async (
             Guid id,
@@ -257,8 +258,8 @@ public static class DepositEndpoints
             ISignalRNotificationService notifications,
             IFCMNotificationService fcm,
             IChatService chat,
-            ILogger<Program> logger) => 
-        { 
+            ILogger<Program> logger) =>
+        {
             var userId = GetUserId(http);
 
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
@@ -280,7 +281,7 @@ public static class DepositEndpoints
 
             if (deposit.Estado != DepositStates.Procesado)
             {
-                return Results.BadRequest(new { 
+                return Results.BadRequest(new {
                     error = $"Solo se pueden confirmar depósitos en estado '{DepositStates.Procesado}'",
                     estadoActual = deposit.Estado
                 });
@@ -322,7 +323,7 @@ public static class DepositEndpoints
             var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
             if (vendedor?.FcmToken != null)
             {
-                try 
+                try
                 {
                     await fcm.SendDepositConfirmedAsync(vendedor.FcmToken, notification, body: mensajePush);
                 }
@@ -358,7 +359,7 @@ public static class DepositEndpoints
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
                 return Results.Forbid();
-            
+
             var deposit = await context.Depositos
                 .Include(d => d.Empresa)
                 .Include(d => d.Sucursal)
@@ -415,7 +416,92 @@ public static class DepositEndpoints
         .RequireAuthorization()
         .WithTags("Deposits")
         .WithSummary("Rechazar depósito manualmente");
-        
+
+        // POST: Marcar depósito para regularizar (finanzas/admin)
+        group.MapPost("/{id:guid}/mark-regularize", async (Guid id, HttpContext http, AppDbContext context, IChatService chat, ISignalRNotificationService notifications, ILogger<Program> logger) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
+
+            deposit.PendienteRegularizar = true;
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+
+            logger.LogInformation("Depósito {DepositId} marcado para regularizar", deposit.Id);
+            return Results.Ok(new { depositId = deposit.Id, pendienteRegularizar = true });
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Marcar un depósito para regularizar (Solo Finanzas/Admin)")
+        .WithDescription("Marca cualquier depósito, sin importar su estado");
+
+        // POST: Desmarcar (por si se marcó por error)
+        group.MapPost("/{id:guid}/unmark-regularize", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
+
+            deposit.PendienteRegularizar = false;
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+
+            return Results.Ok(new { depositId = deposit.Id, pendienteRegularizar = false });
+        }).RequireAuthorization();
+
+        // PUT: Finazas/Admin sube la imagen nueva -- SOLO reemplaza el archivo
+        group.MapPut("/{id:guid}/finance-regularize-image", async (
+            Guid id, 
+            HttpContext http, 
+            [FromBody] FinanceRegularizeImageRequest request, 
+            AppDbContext context,
+            IStorageService storage,
+            IChatService chat,
+            ISignalRNotificationService notifications,
+            ILogger<Program> logger) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
+
+            if (!deposit.PendienteRegularizar)
+            {
+                return Results.BadRequest(new { error = "Este depósito no está marcado para regularizar el voucher"});
+            }
+
+            var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
+            if (error != null) return Results.BadRequest(new { error });
+
+            var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
+
+            deposit.ImagenVoucher = objectName;
+            deposit.PendienteRegularizar = false;
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+            logger.LogInformation("Imagen de depósito {DepositId} regularizada por finanzas.", deposit.Id);
+            return Results.Ok(new { depositId = deposit.Id, estado = deposit.Estado, pendienteRegularizar = false });
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Reemplazar la imagen de un depósito marcado para regularizar (Solo Finanzas/Admin)")
+        .WithDescription("A diferencia de /regularize, NO cambia el Estado ni encola el depósito.");
+
         // PUT: Regularizar depósito rechazado
         group.MapPut("/{id:guid}/regularize", async (
             Guid id,
@@ -433,7 +519,6 @@ public static class DepositEndpoints
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
             if (user == null)
                 return Results.Unauthorized();
-            
             var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
 
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
@@ -448,7 +533,7 @@ public static class DepositEndpoints
             }
 
             var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
-            
+
             if (error != null)
             {
                 return Results.BadRequest(new { error = "ImagenBase64 inválida" });
@@ -474,7 +559,7 @@ public static class DepositEndpoints
 
             await notifications.NotifyDepositReceived(userId, deposit.Id);
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Recibido, oldStatus);
-            
+
             logger.LogInformation("Depósito {DepositId} regularizado por usuario {UserId}", deposit.Id, userId);
 
             return Results.Ok(new
@@ -564,7 +649,7 @@ public static class DepositEndpoints
             return Results.Ok(new { success = true });
         }).RequireAuthorization();
     }
-    
+
     // Helpers privados
     private static Guid GetUserId(HttpContext http)
         => Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
@@ -614,7 +699,7 @@ public static class DepositEndpoints
             VendedorNombre: vendedorNombre
         ));
     }
-    
+
     private static async Task<DepositResponse> MapToResponseAsync(Deposito d, IStorageService storage)
     {
         string? imageUrl = null;
@@ -627,7 +712,7 @@ public static class DepositEndpoints
             }
             catch
             {
-                
+
             }
         }
 

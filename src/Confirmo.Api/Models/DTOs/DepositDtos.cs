@@ -66,7 +66,8 @@ public record DepositListResponse(
     Guid? TrabajadorId,
     Guid? ValidadoPor,
     EmpresaResponse? Empresa = null,
-    BancoResponse? Banco = null
+    BancoResponse? Banco = null,
+    bool PendienteRegularizar = false
 );
 
 public record DepositListPagedResponse(
@@ -82,3 +83,5 @@ public record CheckDuplicateRequest(
     string NumeroOperacion,
     Guid? ExcludeId
 );
+
+public record FinanceRegularizeImageRequest(string ImagenBase64);
