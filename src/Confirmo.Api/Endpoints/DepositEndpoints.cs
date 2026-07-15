@@ -171,6 +171,29 @@ public static class DepositEndpoints
 
             return deposit is not null ? Results.Ok(await MapToResponseAsync(deposit, storage)) : Results.NotFound();
         });
+
+        // GET: Obtener la imagen del voucher
+        group.MapGet("/{id:guid}/image", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            var isFinanceOrAdmin = user != null && (user.Rol == "finanzas" || user.Rol == "admin");
+
+            var query = context.Depositos.AsNoTracking().Where(d => d.Id == id);
+            if (!isFinanceOrAdmin)
+            {
+                query = query.Where(d => d.VendedorId == userId);
+            }
+
+            var deposit = await query.FirstOrDefaultAsync();
+            if (deposit == null || string.IsNullOrEmpty(deposit.ImagenVoucher))
+            {
+                return Results.NotFound();
+            }
+
+            var signedUrl = await storage.GetSignedUrlAsync(deposit.ImagenVoucher);
+            return Results.Redirect(signedUrl);
+        });
         
         // GET: Listar depósitos
         group.MapGet("/", async (
