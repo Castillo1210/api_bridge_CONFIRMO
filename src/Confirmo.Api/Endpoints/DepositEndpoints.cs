@@ -253,7 +253,7 @@ public static class DepositEndpoints
         });
 
         // GET: Respaldo de vouchers en ZIP
-        group.MapGet("/export_vouchers-zip", async (
+        group.MapGet("/export-vouchers-zip", async (
             HttpContext http,
             AppDbContext context,
             IStorageService storage,
