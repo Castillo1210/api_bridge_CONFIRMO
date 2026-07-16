@@ -300,6 +300,12 @@ public static class DepositEndpoints
             http.Response.ContentType = "application/zip";
             http.Response.Headers.Append("Content-Disposition", "attachment; filename=\"vouchers_respaldo.zip\"");
 
+            var syncIOFeature = http.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpBodyControlFeature>();
+            if (syncIOFeature != null)
+            {
+                syncIOFeature.AllowSynchronousIO = true;
+            }
+
             using (var zip = new ZipArchive(http.Response.Body, ZipArchiveMode.Create, leaveOpen: true))
             {
                 var usedNames = new HashSet<string>();
