@@ -1,10 +1,13 @@
 using System.Globalization;
+using System.IO.Compression;
+using System.Security.Principal;
 using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
@@ -247,6 +250,93 @@ public static class DepositEndpoints
                     d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
+        });
+
+        // GET: Respaldo de vouchers en ZIP
+        group.MapGet("/export_vouchers-zip", async (
+            HttpContext http,
+            AppDbContext context,
+            IStorageService storage,
+            ILogger<Program> logger,
+            [FromQuery] Guid? sucursalId,
+            [FromQuery] DateOnly? fechaDesde,
+            [FromQuery] DateOnly? fechaHasta,
+            [FromQuery] string? estado
+        ) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var query = context.Depositos
+                .Include(d => d.Sucursal)
+                .AsNoTracking()
+                .Where(d => d.ImagenVoucher != null && d.Estado == DepositStates.Confirmado)
+                .AsQueryable();
+            
+            if (sucursalId.HasValue) query = query.Where(d => d.SucursalId == sucursalId.Value);
+            if (fechaDesde.HasValue) query = query.Where(d => d.FechaDeposito >= fechaDesde.Value);
+            if (fechaHasta.HasValue) query = query.Where(d => d.FechaDeposito <= fechaHasta.Value);
+
+            const int maxArchivos = 2000;
+            var total = await query.CountAsync();
+            if (total == 0)
+                return Results.NotFound(new { error = "No hay vouchers validados que coinciden con los filtros" });
+            if (total > maxArchivos)
+                return Results.BadRequest(new { error = $"El filtro trae {total} depósitos; el máximo por descarga es {maxArchivos}. Reduce el rango de fechas o filtra por sucursal." });
+            
+            var deposits = await query
+                .OrderBy(d => d.FechaDeposito)
+                .Select(d => new
+                {
+                    d.Id,
+                    d.ImagenVoucher,
+                    d.NumeroOperacion,
+                    d.FechaDeposito,
+                    SucursalNombre = d.Sucursal != null ? d.Sucursal.Nombre : null
+                }).ToListAsync();
+            
+            http.Response.ContentType = "application/zip";
+            http.Response.Headers.Append("Content-Disposition", "attachment; filename=\"vouchers_respaldo.zip\"");
+
+            using (var zip = new ZipArchive(http.Response.Body, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                var usedNames = new HashSet<string>();
+
+                foreach (var d in deposits)
+                {
+                    var fecha = d.FechaDeposito?.ToString("yyyy-MM-dd") ?? "sin_fecha";
+                    var sucursal = SanitizeForPath(d.SucursalNombre ?? "sin_sucursal");
+                    var baseName = SanitizeForPath(!string.IsNullOrWhiteSpace(d.NumeroOperacion) ? d.NumeroOperacion : d.Id.ToString());
+                    var ext = Path.GetExtension(d.ImagenVoucher) is { Length: > 0 } e ? e : ".bin";
+
+                    var entryName = $"{fecha}/{sucursal}/{baseName}{ext}";
+                    var suffix = 1;
+                    while (!usedNames.Add(entryName))
+                    {
+                        entryName = $"{fecha}/{sucursal}/{baseName}_{suffix}{ext}";
+                    }
+
+                    try
+                    {
+                        var bytes = await storage.DownloadVoucherAsync(d.ImagenVoucher!);
+                        var entry = zip.CreateEntry(entryName, CompressionLevel.Fastest);
+                        await using var entryStream = entry.Open();
+                        await entryStream.WriteAsync(bytes);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "No se pudo descargar voucher {DepositId} para el ZIP de respaldo", d.Id);
+                        var entry = zip.CreateEntry($"{fecha}/{sucursal}/ERROR_{baseName}.text");
+                        await using var entryStream = entry.Open();
+                        await using var writer = new StreamWriter(entryStream);
+                        await writer.WriteAsync($"No se pudo descargar el voucher del depósito {d.Id}: {ex.Message}");
+                    }
+                }
+            }
+
+            return Results.Empty;
         });
 
         // POST: Confirmar depósito (finanzas/admin)
@@ -743,6 +833,13 @@ public static class DepositEndpoints
             return "image/webp";
 
         return "image/jpeg";
+    }
+
+    private static string SanitizeForPath(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(value.Select(c => invalid.Contains(c) || c == '/' || c == '\\' ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrEmpty(cleaned) ? "sin_valor" : cleaned;
     }
 }
 
