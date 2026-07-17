@@ -18,6 +18,7 @@ public static class MovimientosBancariosEndpoints
             string empresa,
             DateOnly fechaDesde,
             DateOnly fechaHasta,
+            string? search,
             AppDbContext context,
             CancellationToken cts
         ) =>
@@ -39,8 +40,9 @@ public static class MovimientosBancariosEndpoints
                 return Results.BadRequest("El rango de fechas no puede superar 62 días");
             }
 
-            var desde = fechaDesde.ToDateTime(TimeOnly.MinValue);
-            var hastaExclusivo = fechaHasta.ToDateTime(TimeOnly.MinValue).AddDays(1);
+            var desde = DateTime.SpecifyKind(fechaDesde.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+            var hastaExclusivo = DateTime.SpecifyKind(fechaHasta.ToDateTime(TimeOnly.MinValue).AddDays(1), DateTimeKind.Utc);
+            var searchPattern = string.IsNullOrWhiteSpace(search) ? null : $"%{search.Trim()}%";
 
             const string sql = @"
                 SELECT
@@ -54,9 +56,10 @@ public static class MovimientosBancariosEndpoints
                     AND fecha >= {1}
                     AND fecha < {2}
                     AND abono > 0
+                    AND ({3}::text IS NULL OR nro_oper ILIKE {3} OR banco ILIKE {3} OR descripcion ILIKE {3})
                 ORDER BY fecha ASC";
 
-            var movimientos = await context.Database.SqlQueryRaw<MovimientoResumenDto>(sql, empresaNormalizada, desde, hastaExclusivo).ToListAsync(cts);
+            var movimientos = await context.Database.SqlQueryRaw<MovimientoResumenDto>(sql, empresaNormalizada, desde, hastaExclusivo, searchPattern!).ToListAsync(cts);
 
             return Results.Ok(movimientos);
         })
