@@ -95,6 +95,7 @@ public static class DepositEndpoints
             var results = new List<object>();
 
             using var transaction = await context.Database.BeginTransactionAsync();
+            var creados = new List<(Guid Id, string ObjectName, string? BancoId)>();
             try
             {
                 foreach (var item in request.Items)
@@ -131,15 +132,12 @@ public static class DepositEndpoints
 
                     context.Depositos.Add(deposit);
                     await context.SaveChangesAsync();
-
-                    await EnqueueToRedis(redisQueue, deposit.Id, objectName, item.BancoId);
-                    await NotifyNewDeposit(notifications, userId, deposit, user.FullName);
+                    creados.Add((deposit.Id, objectName, item.BancoId));
 
                     results.Add(new { depositId = deposit.Id, estado = deposit.Estado });
                 }
 
                 await transaction.CommitAsync();
-                return Results.Ok(new { items = results });
             }
             catch (Exception ex)
             {
@@ -147,6 +145,15 @@ public static class DepositEndpoints
                 logger.LogError(ex, "Error en batch deposits");
                 return Results.BadRequest(new { error = "Error procesando lote", detail = ex.Message });
             }
+
+            foreach (var (id, objectName, bancoId) in creados)
+            {
+                var deposit = await context.Depositos.AsNoTracking().FirstAsync(d => d.Id == id);
+                await EnqueueToRedis(redisQueue, id, objectName, bancoId);
+                await NotifyNewDeposit(notifications, userId, deposit, user.FullName);
+            }
+
+            return Results.Ok(new { items = results });
         })
         .RequireAuthorization()
         .WithSummary("Crear múltiples depósitos en lote")
@@ -240,6 +247,10 @@ public static class DepositEndpoints
             if (hasta.HasValue) query = query.Where(d => d.FechaRegistro <= hasta.Value.ToUniversalTime());
 
             var total = await query.CountAsync();
+
+            pageSize = Math.Clamp(pageSize, 1, 100);
+            page = Math.Max(page, 1);
+
             var items = await query
                 .OrderByDescending(d => d.FechaRegistro)
                 .Skip((page - 1) * pageSize)

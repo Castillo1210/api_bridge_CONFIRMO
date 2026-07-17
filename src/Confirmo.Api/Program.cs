@@ -112,13 +112,18 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Robots-Tag", "noindex, nofollow, noarchive");
     await next();
 });
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -126,10 +131,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseSerilogRequestLogging();
 app.UseMiddleware<ErrorHandlingMiddleware>();
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -137,6 +138,7 @@ app.UseAuthorization();
 // Endpoints
 app.MapAuthEndpoints();
 app.MapDepositEndpoints();
+app.MapMovimientosBancariosEndpoints();
 app.MapInternalEndpoints();
 app.MapChatEndpoints();
 app.MapVendedorChatEndpoints();
@@ -147,14 +149,6 @@ app.MapHub<DepositHub>("/hubs/deposits");
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));
-
-// Migraciones automáticas en desarrollo
-if (app.Environment.IsDevelopment())
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-}
 
 app.Run();
 

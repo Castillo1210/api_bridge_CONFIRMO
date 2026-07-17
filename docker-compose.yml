@@ -49,7 +49,8 @@ services:
     expose:
       - "8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
+      - EnableSwagger=true
       - ASPNETCORE_URLS=http://+:8080
       - Database__Host=cloudsql-proxy
       - Database__Port=5432
@@ -106,8 +107,8 @@ services:
       dockerfile: Dockerfile
     image: confirmo/python-worker:latest
     container_name: python-api
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
