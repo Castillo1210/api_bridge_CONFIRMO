@@ -124,10 +124,10 @@ public static class MovimientosBancariosEndpoints
             DateOnly fechaDesde,
             DateOnly fechaHasta,
             string? search,
-            int offset,
-            int limit,
             AppDbContext context,
-            CancellationToken cts
+            CancellationToken cts,
+            int offset = 0,
+            int limit = 50
         ) =>
         {
             var empresaNormalizada = empresa?.Trim().ToUpperInvariant() ?? "";
