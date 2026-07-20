@@ -4,6 +4,7 @@ public class Deposito
 {
     public Guid Id { get; set; }
     public string NumeroOperacion { get; set; } = string.Empty;
+    public string? Cuo { get; set; }
     public string? Cliente { get; set; }
     public decimal Monto { get; set; }
     public string Moneda { get; set; } = string.Empty;
