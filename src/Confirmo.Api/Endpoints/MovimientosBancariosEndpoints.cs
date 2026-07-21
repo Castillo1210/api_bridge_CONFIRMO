@@ -207,7 +207,7 @@ public static class MovimientosBancariosEndpoints
                     t.registro AS ""Registro"",
                     ROUND(COALESCE(t.abono, 0)::numeric - COALESCE(t.cargo, 0)::numeric - t.reg, 2) AS ""Dif"",
                     s.""Nombre"" AS ""Sucursal"",
-                    pv.""FullName"" AS ""Contacto"",
+                    tr.""Nombre"" AS ""Contacto"",
                     d.""TelefonoOrigen"" AS ""TelefonoContacto"",
                     pval.""FullName"" AS ""ValidadoPor""
                 FROM t_cortado t
@@ -215,8 +215,8 @@ public static class MovimientosBancariosEndpoints
                     ON d.""Cuo"" = t.cuo
                 LEFT JOIN sucursales s
                     ON s.""Id"" = d.""SucursalId""
-                LEFT JOIN profiles pv
-                    ON pv.""Id"" = d.""VendedorId""
+                LEFT JOIN trabajadores tr
+                    ON tr.""Id"" = d.""TrabajadorId""
                 LEFT JOIN profiles pval
                     ON pval.""Id"" = d.""ValidadoPor""
                 WHERE ABS(ROUND(COALESCE(t.abono, 0)::numeric - COALESCE(t.cargo, 0)::numeric - t.reg, 2)) > 0.00
@@ -224,7 +224,7 @@ public static class MovimientosBancariosEndpoints
                         OR t.cuo ILIKE {3} OR t.cuoa ILIKE {3} OR t.banco ILIKE {3} OR t.cta ILIKE {3}
                         OR t.nro_oper ILIKE {3} OR t.descripcion ILIKE {3} OR t.plaza ILIKE {3}
                         OR t.agencia ILIKE {3} OR t.razon ILIKE {3} OR t.ruc ILIKE {3} OR t.observacion ILIKE {3}
-                        OR s.""Nombre"" ILIKE {3} OR pv.""FullName"" ILIKE {3})
+                        OR s.""Nombre"" ILIKE {3} OR tr.""Nombre"" ILIKE {3})
                 ORDER BY t.fecha DESC, t.banco ASC, t.cuo ASC
                 LIMIT {5} OFFSET {4}";
             
