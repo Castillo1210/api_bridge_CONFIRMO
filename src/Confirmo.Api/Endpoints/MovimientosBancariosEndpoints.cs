@@ -216,7 +216,7 @@ public static class MovimientosBancariosEndpoints
                 LEFT JOIN sucursales s
                     ON s.""Id"" = d.""SucursalId""
                 LEFT JOIN trabajadores tr
-                    ON tr.""Id"" = d.""TrabajadorId""
+                    ON tr.""Id"" = d.""trabajador_id""
                 LEFT JOIN profiles pval
                     ON pval.""Id"" = d.""ValidadoPor""
                 WHERE ABS(ROUND(COALESCE(t.abono, 0)::numeric - COALESCE(t.cargo, 0)::numeric - t.reg, 2)) > 0.00
