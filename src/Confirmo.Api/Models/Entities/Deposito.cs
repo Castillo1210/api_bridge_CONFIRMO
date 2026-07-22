@@ -10,6 +10,7 @@ public class Deposito
     public string Moneda { get; set; } = string.Empty;
     public DateTimeOffset FechaRegistro { get; set; }
     public string? ImagenVoucher { get; set; }
+    public string? ImagenUrl { get; set; }
     public string? Anexo { get; set; }
     public string? NumeroOperacionBanco { get; set; }
     public DateOnly? FechaDeposito { get; set; }
@@ -22,6 +23,7 @@ public class Deposito
     public Guid? SucursalId { get; set; }
     public Guid VendedorId { get; set; }
     public Guid? ValidadoPor { get; set; }
+    public DateTimeOffset? FechaBloqueo { get; set; }
     public Guid TrabajadorId { get; set; }
     public string? ReferenciaCliente { get; set; }
     public object? DatosOcr { get; set; }

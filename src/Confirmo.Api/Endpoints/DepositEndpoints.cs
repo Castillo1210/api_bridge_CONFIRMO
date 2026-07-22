@@ -257,8 +257,9 @@ public static class DepositEndpoints
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
                     d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Anexo, d.Condicion, d.Riesgo,
-                    d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor,
-                    d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar)).ToListAsync();
+                    d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor, d.ImagenUrl,
+                    d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar,
+                    d.FechaBloqueo)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
@@ -717,7 +718,9 @@ public static class DepositEndpoints
                 return Results.BadRequest(new { error = $"Solo se pueden tomar depósitos en estado '{DepositStates.Procesado}'", estadoActual = deposit.Estado });
             }
 
-            if (deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId)
+            var lockExpired = deposit.FechaBloqueo.HasValue && DateTimeOffset.UtcNow - deposit.FechaBloqueo.Value > TimeSpan.FromMinutes(4);
+
+            if (deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId && !lockExpired)
             {
                 var validador = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.ValidadoPor.Value);
 
@@ -731,6 +734,7 @@ public static class DepositEndpoints
 
             deposit.ValidadoPor = userId;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
+            deposit.FechaBloqueo = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync();
 
             var yo = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
@@ -750,6 +754,8 @@ public static class DepositEndpoints
             if (deposit.ValidadoPor == userId && deposit.Estado == DepositStates.Procesado)
             {
                 deposit.ValidadoPor = null;
+                deposit.FechaBloqueo = null;
+                deposit.FechaValidacion = null;
                 await context.SaveChangesAsync();
                 await notifications.NotifyPanelDepositUnlocked(id);
             }
@@ -831,7 +837,8 @@ public static class DepositEndpoints
             d.ReferenciaCliente, d.DatosOcr, d.RucCliente, d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null,
             d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,
             d.Sucursal != null ? new SucursalResponse(d.Sucursal.Id, d.Sucursal.EmpresaId, d.Sucursal.Nombre, d.Sucursal.Direccion, d.Sucursal.Activo) : null,
-            d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null
+            d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null,
+            d.FechaBloqueo
         );
     }
 

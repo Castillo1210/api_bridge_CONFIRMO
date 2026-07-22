@@ -3,6 +3,7 @@ using System;
 using Confirmo.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Confirmo.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722141814_AddFechaBloqueoToDepositos")]
+    partial class AddFechaBloqueoToDepositos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -186,10 +189,6 @@ namespace Confirmo.Api.Migrations
 
                     b.Property<DateTimeOffset?>("FechaValidacion")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ImagenUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("ImagenVoucher")
                         .HasMaxLength(500)
