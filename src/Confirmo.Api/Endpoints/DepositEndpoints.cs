@@ -398,7 +398,7 @@ public static class DepositEndpoints
             var oldStatus = deposit.Estado;
             deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
-            deposit.Anexo = request?.Anexo;
+            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente);
             deposit.ValidadoPor = userId;
             if (request?.Observaciones != null)
                 deposit.Observaciones = request.Observaciones;
@@ -494,10 +494,11 @@ public static class DepositEndpoints
             deposit.Estado = DepositStates.Rechazado;
             deposit.ValidadoPor = userId;
             deposit.Observaciones = request.Observaciones;
+            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente);
 
             await context.SaveChangesAsync();
 
-            var placeholders = ChatService.BuildDepositPlaceholders(deposit, request.Observaciones);
+            var placeholders = ChatService.BuildDepositPlaceholders(deposit, request?.Observaciones);
             var mensajeChat = await chat.RenderPlantillaAsync("deposito_rechazado", "chat", placeholders);
             var mensajePush = await chat.RenderPlantillaAsync("deposito_rechazado", "push", placeholders);
 
@@ -685,11 +686,18 @@ public static class DepositEndpoints
         // POSt: Comprobar duplicados de depósito
         group.MapPost("/check-duplicate", async ([FromBody] CheckDuplicateRequest request, AppDbContext context) =>
         {
+            var numeroOperacionLimpio = (request.NumeroOperacion ?? string.Empty).TrimStart('0');
+            if (string.IsNullOrEmpty(numeroOperacionLimpio))
+            {
+                numeroOperacionLimpio = request.NumeroOperacion ?? string.Empty;
+            }
+            var patronNumeroOperacion = $"%{numeroOperacionLimpio}";
+
             var query = context.Depositos
                 .Include(d => d.Sucursal)
                 .Include(d => d.Trabajador)
                 .AsNoTracking()
-                .Where(d => d.Estado == DepositStates.Confirmado && d.Monto == request.Monto && d.Moneda == request.Moneda && d.NumeroOperacion == request.NumeroOperacion);
+                .Where(d => d.Estado == DepositStates.Confirmado && d.Monto == request.Monto && d.Moneda == request.Moneda && EF.Functions.ILike(d.NumeroOperacion, patronNumeroOperacion));
 
             if (request.ExcludeId.HasValue)
             {
@@ -864,6 +872,79 @@ public static class DepositEndpoints
         var invalid = Path.GetInvalidFileNameChars();
         var cleaned = new string(value.Select(c => invalid.Contains(c) || c == '/' || c == '\\' ? '_' : c).ToArray()).Trim();
         return string.IsNullOrEmpty(cleaned) ? "sin_valor" : cleaned;
+    }
+
+    private static string? SanitizeNumeroOperacion(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var soloDigitos = new string(value.Where(char.IsDigit).ToArray());
+        return string.IsNullOrEmpty(soloDigitos) ? null : soloDigitos;
+    }
+
+    private static void ApplyEditableDepositFields(
+        Deposito deposit,
+        string? anexo,
+        string? numeroOperacion,
+        string? empresaId,
+        string? bancoId,
+        decimal? monto,
+        string? moneda,
+        string? fechaDeposito,
+        string? cliente,
+        string? rucCliente,
+        string? referenciaCliente
+    )
+    {
+        if (!string.IsNullOrWhiteSpace(anexo))
+        {
+            deposit.Anexo = anexo;
+        }
+
+        var numeroOperacionLimpio = SanitizeNumeroOperacion(numeroOperacion);
+        if (numeroOperacionLimpio != null)
+        {
+            deposit.NumeroOperacion = numeroOperacionLimpio;
+        }
+
+        if (Guid.TryParse(empresaId, out var empresaGuid))
+        {
+            deposit.EmpresaId = empresaGuid;
+        }
+
+        if (Guid.TryParse(bancoId, out var bancoGuid))
+        {
+            deposit.BancoId = bancoGuid;
+        }
+
+        if (monto.HasValue && monto.Value > 0)
+        {
+            deposit.Monto = monto.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(moneda))
+        {
+            deposit.Moneda = moneda;
+        }
+
+        if (DateOnly.TryParse(fechaDeposito, out var fecha))
+        {
+            deposit.FechaDeposito = fecha;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cliente))
+        {
+            deposit.Cliente = cliente;
+        }
+
+        if (!string.IsNullOrWhiteSpace(rucCliente))
+        {
+            deposit.RucCliente = rucCliente;
+        }
+
+        if (!string.IsNullOrWhiteSpace(referenciaCliente))
+        {
+            deposit.ReferenciaCliente = referenciaCliente;
+        }
     }
 }
 

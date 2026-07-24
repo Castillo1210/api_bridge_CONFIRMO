@@ -22,12 +22,30 @@ public record DepositRejectedNotification(
 
 public record ConfirmDepositRequest(
     string? Observaciones,
-    string? Anexo
+    string? Anexo,
+    string? NumeroOperacion,
+    string? EmpresaId,
+    string? BancoId,
+    decimal? Monto,
+    string? Moneda,
+    string? FechaDeposito,
+    string? Cliente,
+    string? RucCliente,
+    string? ReferenciaCliente
 );
 
 public record RejectDepositRequest(
     string Observaciones,
-    string? Anexo
+    string? Anexo,
+    string? NumeroOperacion,
+    string? EmpresaId,
+    string? BancoId,
+    decimal? Monto,
+    string? Moneda,
+    string? FechaDeposito,
+    string? Cliente,
+    string? RucCliente,
+    string? ReferenciaCliente
 );
 
 public record ConfirmDepositResponse(
