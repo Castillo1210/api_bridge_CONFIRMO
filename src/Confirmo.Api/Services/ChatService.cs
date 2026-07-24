@@ -10,12 +10,14 @@ public class ChatService : IChatService
     private readonly AppDbContext _context;
     private readonly ISignalRNotificationService _signalR;
     private readonly ILogger<ChatService> _logger;
+    private readonly IFCMNotificationService _fcmNotificationService;
 
-    public ChatService(AppDbContext context, ISignalRNotificationService signalR, ILogger<ChatService> logger)
+    public ChatService(AppDbContext context, ISignalRNotificationService signalR, ILogger<ChatService> logger, IFCMNotificationService fcmNotificationService)
     {
         _context = context;
         _signalR = signalR;
         _logger = logger;
+        _fcmNotificationService = fcmNotificationService;
     }
 
     public async Task AddMessageAsync(Guid depositId, string senderType, Guid? senderId, string content, string messageType, object? metadata = null)
@@ -100,6 +102,22 @@ public class ChatService : IChatService
         var response = new VendedorMessageResponse(msg.Id, msg.VendedorId, msg.SenderType, msg.SenderId, msg.Content, msg.MessageType, msg.CreatedAt);
 
         await _signalR.NotifyVendedorChatMessage(response);
+
+        if (senderType == "finance")
+        {
+            var vendedor = await _context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == vendedorId);
+            if (vendedor?.FcmToken != null)
+            {
+                try
+                {
+                    await _fcmNotificationService.SendVendedorChatMessageAsync(vendedor.FcmToken, content, vendedorId, msg.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error enviando FCM de chat vendedor, pero el mensaje ya se guardo");
+                }
+            }
+        }
 
         return response;
     }

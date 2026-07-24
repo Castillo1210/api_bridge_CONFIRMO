@@ -13,6 +13,7 @@ public interface IFCMNotificationService
     Task SendDepositConfirmedAsync(string fcmToken, DepositConfirmedNotification notification, string? title = null, string? body = null);
     Task SendDepositRejectedAsync(string fcmToken, string reason, string? title = null, string? body = null);
     Task SendProcessingAsync(string fcmToken, string message);
+    Task SendVendedorChatMessageAsync(string fcmToken, string content, Guid vendedorId, Guid messageId);
 }
 
 public class FCMNotificationService : IFCMNotificationService
@@ -51,6 +52,21 @@ public class FCMNotificationService : IFCMNotificationService
             _logger.LogError(ex, "Error al inicializar Firebase - FCM deshabilitado");
             _initialzed = false;
         }
+    }
+
+    public async Task SendVendedorChatMessageAsync(string fcmToken, string content, Guid vendedorId, Guid messageId)
+    {
+        var title = "💬 Nuevo mensaje de Finanzas";
+        var body = content.Length > 120 ? content[..120] + "..." : content;
+
+        var data =  new Dictionary<string, string>
+        {
+            ["type"] = "vendedor_chat_message",
+            ["vendedorId"] = vendedorId.ToString(),
+            ["messageId"] = messageId.ToString()
+        };
+
+        await SendNotificationAsync(fcmToken, title, body, data);      
     }
 
     public async Task SendNotificationAsync(string fcmToken, string title, string body, Dictionary<string, string>? data = null)
