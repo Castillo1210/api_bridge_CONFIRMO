@@ -248,7 +248,7 @@ public static class DepositEndpoints
 
             var total = await query.CountAsync();
 
-            pageSize = Math.Clamp(pageSize, 1, 100);
+            pageSize = Math.Clamp(pageSize, 1, 1000);
             page = Math.Max(page, 1);
 
             var items = await query
