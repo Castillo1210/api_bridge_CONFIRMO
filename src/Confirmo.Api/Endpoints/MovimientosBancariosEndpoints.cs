@@ -345,8 +345,8 @@ public static class MovimientosBancariosEndpoints
                 ORDER BY rn";
 
             var cortado = await context.Database
-                .SqlQueryRaw<CortadoDto>(sql, empresaNormalizada, desde, hastaExclusivo, bancoPattern!, fechaExacta, importe, offset, limit)
-                .ToListAsync();
+                .SqlQueryRaw<CortadoDto>(sql, empresaNormalizada, desde, hastaExclusivo, nroOperacionPattern!, bancoPattern!, fechaExacta, importe, offset, limit)
+                .ToListAsync(cts);
 
             var totalCount = cortado.FirstOrDefault()?.TotalCount ?? 0L;
 
