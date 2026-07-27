@@ -143,6 +143,7 @@ app.MapInternalEndpoints();
 app.MapChatEndpoints();
 app.MapVendedorChatEndpoints();
 app.MapMasterEndpoints();
+app.MapSyncStatusEndpoints();
 
 // SignalR Hub
 app.MapHub<DepositHub>("/hubs/deposits");
