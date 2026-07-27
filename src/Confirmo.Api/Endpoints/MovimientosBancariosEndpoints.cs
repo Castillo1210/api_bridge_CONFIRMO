@@ -1,5 +1,6 @@
 using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
+using Grpc.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace Confirmo.Api.Endpoints;
@@ -236,6 +237,123 @@ public static class MovimientosBancariosEndpoints
         })
         .WithName("GetMovimientosPorIdentificar")
         .Produces<List<MovimientoPorIdentificarDto>>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status400BadRequest);
+
+        group.MapGet("/cortado", async (
+            string empresa,
+            DateOnly fechaDesde,
+            DateOnly fechaHasta,
+            string? nroOperacion,
+            string? banco,
+            DateOnly? fecha,
+            decimal? importe,
+            AppDbContext context,
+            CancellationToken cts,
+            int offset = 0,
+            int limit = 100
+        ) =>
+        {
+            var empresaNormalizada = empresa?.Trim().ToUpperInvariant() ?? "";
+
+            if (!EmpresasValidas.Contains(empresaNormalizada))
+            {
+                return Results.BadRequest("Empresa invalida. Solo valores permitidos");
+            }
+
+            if (fechaHasta < fechaDesde)
+            {
+                return Results.BadRequest("fechaHasta no puede ser anterior a fechaDesde");
+            }
+
+            if ((fechaHasta.ToDateTime(TimeOnly.MinValue) - fechaDesde.ToDateTime(TimeOnly.MinValue)).TotalDays > 62)
+            {
+                return Results.BadRequest("El rango de fechas no puede superar los 62 días");
+            }
+
+            if (offset < 0) offset = 0;
+            if (limit <= 0) limit = 100;
+            if (limit > 500) limit = 500;
+
+            var desde = DateTime.SpecifyKind(fechaDesde.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+            var hastaExclusivo = DateTime.SpecifyKind(fechaHasta.ToDateTime(TimeOnly.MinValue).AddDays(1), DateTimeKind.Utc);
+            var nroOperacionPattern = string.IsNullOrWhiteSpace(nroOperacion) ? null : $"%{nroOperacion.Trim()}%";
+            var bancoPattern = string.IsNullOrWhiteSpace(banco) ? null : $"%{banco.Trim()}%";
+            DateTime? fechaExacta = fecha.HasValue ? DateTime.SpecifyKind(fecha.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc) : null;
+
+            const string sql = @"
+                WITH t_registros AS (
+                    SELECT
+                        mcuo,
+                        CASE WHEN COUNT(DISTINCT NULLIF(TRIM(registro), '')) > 1 THEN 'VARIOS'
+                            ELSE COALESCE(MAX(NULLIF(TRIM(registro), '')), '') END AS registro,
+                        CASE WHEN COUNT(DISTINCT NULLIF(TRIM(descripcion), '')) > 1 THEN 'VARIOS'
+                            ELSE COALESCE(MAX(NULLIF(TRIM(descripcion), '')), '') END AS glosa,
+                        SUM(COALESCE(importe, 0)) AS reg
+                    FROM registros_concar
+                    WHERE empresa = {0}
+                        AND estado <> 'ELIMINADO'
+                        AND fecha_rep >= {1} AND fecha_rep < {2}
+                    GROUP BY mcuo
+                ),
+                t_cortado AS (
+                    SELECT
+                        m.id_origen, m.cuo, m.periodo, m.banco, m.fecha, m.descripcion, m.nro_oper,
+                        m.cargo, m.abono, m.sd, m.comp, m.tipo, m.doc, m.area, m.observacion,
+                        COALESCE(r.registro, '') AS registro,
+                        COALESCE(r.glosa, '') AS glosa,
+                        COALESCE(r.reg, 0) AS reg,
+                        ROUND(COALESCE(m.abono, 0)::numeric - COALESCE(m.cargo, 0)::numeric - COALESCE(r.reg, 0)::numeric, 2) AS dif
+                    FROM movimientos_bancarios m
+                    LEFT JOIN t_registros r ON r.mcuo = m.cuo
+                    WHERE m.empresa = {0}
+                        AND m.fecha >= {1}
+                        AND m.fecha < {2}
+                ),
+                filtrado AS (
+                    SELECT t.*,
+                        COUNT(*) OVER() AS total_count,
+                        ROW_NUMBER() OVER (ORDER BY t.fecha, t.banco, t.cuo, t.id_origen) AS rn
+                    FROM t_cortado t
+                    WHERE ({3}::text IS NULL OR t.nro_oper ILIKE {3} OR t.cuo ILIKE {3})
+                        AND ({4}::text IS NULL OR t.banco ILIKE {4})
+                        AND ({5}::date IS NULL OR t.fecha = {5}::date)
+                        AND ({6}::numeric IS NULL OR ABS(ROUND(COALESCE(t.abono, 0)::numeric, 2) - ROUND({6}::numeric, 2)) < 0.01)
+                )
+                SELECT
+                    id_origen AS ""IdOrigen"",
+                    cuo AS ""Cuo"",
+                    periodo AS ""Periodo"",
+                    banco AS ""Banco"",
+                    fecha AS ""Fecha"",
+                    descripcion AS ""Descripcion"",
+                    nro_oper AS ""NroOper"",
+                    cargo AS ""Cargo"",
+                    abono AS ""Abono"",
+                    sd AS ""Sd"",
+                    comp AS ""Comp"",
+                    tipo AS ""Tipo"",
+                    doc AS ""Doc"",
+                    area AS ""Area"",
+                    observacion AS ""Observacion"",
+                    registro AS ""Registro"",
+                    glosa AS ""Glosa"",
+                    reg AS ""Reg"",
+                    dif AS ""Dif"",
+                    total_count AS ""TotalCount""
+                FROM filtrado
+                WHERE rn > {7} AND rn <= ({7} + {8})
+                ORDER BY rn";
+
+            var cortado = await context.Database
+                .SqlQueryRaw<CortadoDto>(sql, empresaNormalizada, desde, hastaExclusivo, bancoPattern!, fechaExacta, importe, offset, limit)
+                .ToListAsync();
+
+            var totalCount = cortado.FirstOrDefault()?.TotalCount ?? 0L;
+
+            return Results.Ok(new { rows = cortado, totalCount });
+        })
+        .WithName("GetCortadoVsRegistrosConcar")
+        .Produces(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status400BadRequest);
     }
 }
