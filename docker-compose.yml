@@ -171,6 +171,7 @@ services:
       # IA LlamaParser
       - LLAMA_PARSER_URL=${LLAMA_PARSER_URL}
       - LLAMA_PARSER_API_KEY=${LLAMA_PARSER_API_KEY}
+      - LLAMA_PARSE_CONFIG_ID=${LLAMA_PARSE_CONFIG_ID}
       # API Bridge
       - API_BRIDGE_URL=http://api-bridge:8080
       - INTERNAL_SECRET=${INTERNAL_SECRET}
