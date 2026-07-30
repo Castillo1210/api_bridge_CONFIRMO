@@ -159,6 +159,42 @@ public static class DepositEndpoints
         .WithSummary("Crear múltiples depósitos en lote")
         .WithDescription("Recibe una lista de vouchers, los sube a GCS, los registra en BD y los encola para procesamiento.");
 
+        // GET: Listar depositos regularizados
+        group.MapGet("/regularizaciones-historial", async (HttpContext http, AppDbContext context, DateTimeOffset? desde, DateTimeOffset? hasta, string? accion, Guid? empresaId) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var query = context.DepositoRegularizaciones
+                .AsNoTracking()
+                .Include(r => r.Deposito!).ThenInclude(d => d.Empresa)
+                .Include(r => r.Usuario)
+                .AsQueryable();
+
+            if (desde.HasValue) query = query.Where(r => r.CreatedAt >= desde.Value);
+            if (hasta.HasValue) query = query.Where(r => r.CreatedAt <= hasta.Value);
+            if (!string.IsNullOrWhiteSpace(accion)) query = query.Where(r => r.Accion == accion);
+            if (empresaId.HasValue) query = query.Where(r => r.Deposito!.EmpresaId == empresaId.Value);
+
+            var result = await query
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new RegularizacionHistorialDto(
+                    r.Id, r.DepositoId,
+                    r.Deposito!.NumeroOperacion, r.Deposito!.Cliente,
+                    r.Deposito!.Empresa!.Nombre, r.Deposito!.Monto,
+                    r.Accion,
+                    r.Usuario != null ? r.Usuario.FullName : null,
+                    r.CreatedAt, r.Motivo))
+                .ToListAsync();
+
+            return Results.Ok(result);
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Historial de regularizaciones (Solo Finanzas/Admin)");
+
         // GET: un depósito
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
@@ -538,6 +574,13 @@ public static class DepositEndpoints
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
 
             deposit.PendienteRegularizar = true;
+            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+            {
+                DepositoId = deposit.Id,
+                Accion = "marcado",
+                UsuarioId = userId,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
@@ -562,6 +605,13 @@ public static class DepositEndpoints
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
 
             deposit.PendienteRegularizar = false;
+            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+            {
+                DepositoId = deposit.Id,
+                Accion = "desmarcado",
+                UsuarioId = userId,
+                CreatedAt = DateTimeOffset.UtcNow
+            });
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
@@ -596,10 +646,20 @@ public static class DepositEndpoints
             var (imageBytes, error) = ValidateAndDecodeImage(request.ImagenBase64);
             if (error != null) return Results.BadRequest(new { error });
 
+            var imagenAnterior = deposit.ImagenVoucher;
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
 
             deposit.ImagenVoucher = objectName;
             deposit.PendienteRegularizar = false;
+            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+            {
+                DepositoId = deposit.Id,
+                Accion = "resuelto",
+                UsuarioId = userId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                ImagenAnterior = imagenAnterior,
+                ImagenNueva = objectName
+            });
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);

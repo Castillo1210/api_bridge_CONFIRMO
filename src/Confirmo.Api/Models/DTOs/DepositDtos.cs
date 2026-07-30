@@ -14,6 +14,19 @@ public record RegularizeDepositRequest(
     string? EmpresaId
 );
 
+public record RegularizacionHistorialDto(
+    Guid Id,
+    Guid DepositoId,
+    string? NumeroOperacion,
+    string? Cliente,
+    string? EmpresaNombre,
+    decimal Monto,
+    string Accion,
+    string? UsuarioNombre,
+    DateTimeOffset CreatedAt,
+    string? Motivo
+);
+
 public record DepositResponse(
     Guid Id,
     string NumeroOperacion,

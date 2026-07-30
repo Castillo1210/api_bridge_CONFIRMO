@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<VoucherBusinessError> VoucherBusinessErrors => Set<VoucherBusinessError>();
     public DbSet<VendedorMessage> VendedorMessages => Set<VendedorMessage>();
     public DbSet<PlantillaMensajeSistema> PlantillasMensajesSistema => Set<PlantillaMensajeSistema>();
+    public DbSet<DepositoRegularizacion> DepositoRegularizaciones => Set<DepositoRegularizacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
