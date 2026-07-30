@@ -186,7 +186,8 @@ public static class DepositEndpoints
                     r.Deposito!.Empresa!.Nombre, r.Deposito!.Monto,
                     r.Accion,
                     r.Usuario != null ? r.Usuario.FullName : null,
-                    r.CreatedAt, r.Motivo))
+                    r.CreatedAt, r.Motivo,
+                    r.ImagenAnterior, r.ImagenNueva))
                 .ToListAsync();
 
             return Results.Ok(result);
@@ -194,6 +195,36 @@ public static class DepositEndpoints
         .RequireAuthorization()
         .WithTags("Deposits")
         .WithSummary("Historial de regularizaciones (Solo Finanzas/Admin)");
+
+        group.MapGet("/regularizaciones-historial/{id:guid}/imagen-anterior", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var registro = await context.DepositoRegularizaciones.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+            if (registro == null || string.IsNullOrEmpty(registro.ImagenAnterior))
+                return Results.NotFound();
+
+            var signedUrl = await storage.GetSignedUrlAsync(registro.ImagenAnterior);
+            return Results.Redirect(signedUrl);
+        });
+
+        group.MapGet("/regularizaciones-historial/{id:guid}/imagen-nueva", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var registro = await context.DepositoRegularizaciones.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+            if (registro == null || string.IsNullOrEmpty(registro.ImagenNueva))
+                return Results.NotFound();
+
+            var signedUrl = await storage.GetSignedUrlAsync(registro.ImagenNueva);
+            return Results.Redirect(signedUrl);
+        });
 
         // GET: un depósito
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>

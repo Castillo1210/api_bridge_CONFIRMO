@@ -24,7 +24,9 @@ public record RegularizacionHistorialDto(
     string Accion,
     string? UsuarioNombre,
     DateTimeOffset CreatedAt,
-    string? Motivo
+    string? Motivo,
+    string? ImagenAnterior,
+    string? ImagenNueva
 );
 
 public record DepositResponse(
