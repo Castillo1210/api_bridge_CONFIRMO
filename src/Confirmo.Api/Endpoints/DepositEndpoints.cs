@@ -479,7 +479,7 @@ public static class DepositEndpoints
             if (deposit.Anexo == "LCRED MN")
             {
                 var mensajeRecordatorio = await chat.RenderPlantillaAsync("recordatorio_qr", "chat", placeholders);
-                await chat.SendDirectMessageAsync(deposit.VendedorId, mensajeRecordatorio);
+                await chat.SendDirectMessageAsync(deposit.VendedorId, mensajeRecordatorio, deposit.Id);
             }
 
             await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
