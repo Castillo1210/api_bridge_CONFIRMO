@@ -478,7 +478,8 @@ public static class DepositEndpoints
 
             if (deposit.Anexo == "LCRED MN")
             {
-                mensajeChat += "\n\nRecordatorio: Canalizar los pagos QR y Yape al QR Continental.";
+                var mensajeRecordatorio = await chat.RenderPlantillaAsync("recordatorio_qr", "chat", placeholders);
+                await chat.SendDirectMessageAsync(deposit.VendedorId, mensajeRecordatorio);
             }
 
             await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
