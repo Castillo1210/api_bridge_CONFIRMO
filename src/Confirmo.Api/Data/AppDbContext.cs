@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<VendedorMessage> VendedorMessages => Set<VendedorMessage>();
     public DbSet<PlantillaMensajeSistema> PlantillasMensajesSistema => Set<PlantillaMensajeSistema>();
     public DbSet<DepositoRegularizacion> DepositoRegularizaciones => Set<DepositoRegularizacion>();
+    public DbSet<Aviso> Avisos => Set<Aviso>();
+    public DbSet<EnvioAvisoLog> EnvioAvisoLogs => Set<EnvioAvisoLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

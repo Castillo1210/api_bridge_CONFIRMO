@@ -84,6 +84,14 @@ builder.Services.AddHostedService<WorkerResultConsumer>();
 
 builder.Services.AddFCMNotifications(builder.Configuration);
 
+builder.Services.AddHttpClient<IZavuClient, ZavuClient>(c =>
+{
+    c.BaseAddress = new Uri(builder.Configuration["Zavu:BaseUrl"] ?? "https://api.zavu.dev");
+    c.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", builder.Configuration["Zavu:ApiKey"]);
+});
+
+builder.Services.AddHostedService<AvisoDispatchService>();
+
 // SignalR con Redis Backplane
 var signalRBuilder = builder.Services.AddSignalR(o =>
 {
@@ -144,6 +152,7 @@ app.MapChatEndpoints();
 app.MapVendedorChatEndpoints();
 app.MapMasterEndpoints();
 app.MapSyncStatusEndpoints();
+app.MapAvisoEndpoints();
 
 // SignalR Hub
 app.MapHub<DepositHub>("/hubs/deposits");

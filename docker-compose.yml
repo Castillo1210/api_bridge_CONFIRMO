@@ -80,6 +80,9 @@ services:
       # Firebase FCM
       - Firebase__ProjectId=${FIREBASE_PROJECT_ID}
       - Firebase__CredentialsPath=/secrets/firebase-sa.json
+      # Zavu
+      - Zavu__BaseUrl=https://api.zavu.dev
+      - Zavu__ApiKey=${ZAVU_API_KEY}
     volumes:
         - ./secrets/sa-key.json:/secrets/sa-key.json:ro
         - ./secrets/firebase-sa.json:/secrets/firebase-sa.json:ro
