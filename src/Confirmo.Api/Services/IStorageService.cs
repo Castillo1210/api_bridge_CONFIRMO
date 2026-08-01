@@ -6,4 +6,5 @@ public interface IStorageService
     Task<byte[]> DownloadVoucherAsync(string objectName);
     Task DeleteVoucherAsync(string objectName);
     Task<string> GetSignedUrlAsync(string objectName, TimeSpan? duration = null);
+    Task<string> UploadAvisoMediaAsync(byte[] mediaBytes, string contentType);
 }

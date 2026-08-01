@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Confirmo.Api.Data;
 using Confirmo.Api.Models.DTOs;
 using Confirmo.Api.Models.Entities;
+using Confirmo.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Confirmo.Api.Endpoints;
@@ -126,6 +127,49 @@ public static class AvisoEndpoints
             await context.SaveChangesAsync();
 
             return Results.Ok(new { id = aviso.Id, activo = false });
+        });
+
+        //POST: Subir imagen/PDF
+        group.MapPost("/media", async (UploadAvisoMediaRequest request, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || user.Rol != "admin")
+                return Results.Forbid();
+
+            if (string.IsNullOrWhiteSpace(request.ImagenBase64))
+                return Results.BadRequest(new { error = "Imagen requerida" });
+
+            byte[] bytes;
+            try
+            {
+                var cleaned = request.ImagenBase64.Contains(',') ? request.ImagenBase64.Split(',')[1] : request.ImagenBase64;
+                bytes = Convert.FromBase64String(cleaned);
+            }
+            catch
+            {
+                return Results.BadRequest(new { error = "Imagen inválida" });
+            }
+
+            var contentType = request.ContentType ?? "image/jpeg";
+            var objectName = await storage.UploadAvisoMediaAsync(bytes, contentType);
+
+            return Results.Ok(new { mediaUrl = objectName, tipoMedia = contentType });
+        });
+
+        //GET: Obtener URL firmada por imagen
+        group.MapGet("/{id:guid}/media", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null) return Results.Forbid();
+
+            var aviso = await context.Avisos.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
+            if (aviso == null || string.IsNullOrEmpty(aviso.MediaUrl))
+                return Results.NotFound();
+
+            var signedUrl = await storage.GetSignedUrlAsync(aviso.MediaUrl);
+            return Results.Redirect(signedUrl);
         });
     }
 

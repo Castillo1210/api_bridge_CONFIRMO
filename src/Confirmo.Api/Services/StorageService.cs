@@ -65,4 +65,23 @@ public class StorageService : IStorageService
 
         return signedUrl;
     }
+
+    public async Task<string> UploadAvisoMediaAsync(byte[] mediaBytes, string contentType)
+    {
+        var ext = contentType switch
+        {
+            "image/png" => "png",
+            "image/webp" => "webp",
+            "application/pdf" => "pdf",
+            _ => "jpg",
+        };
+
+        var objectName = $"avisos/{Guid.NewGuid()}.{ext}";
+
+        var bucket = await StorageClient.CreateAsync();
+        using var stream = new MemoryStream(mediaBytes);
+        await bucket.UploadObjectAsync(_bucketName, objectName, contentType, stream);
+
+        return objectName;
+    }
 }

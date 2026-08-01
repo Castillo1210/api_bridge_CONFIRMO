@@ -38,3 +38,5 @@ public record AvisoResponse(
     string? CreadoPorNombre,
     DateTimeOffset CreatedAt
 );
+
+public record UploadAvisoMediaRequest(string ImagenBase64, string? ContentType);
