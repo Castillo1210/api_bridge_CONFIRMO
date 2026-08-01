@@ -57,6 +57,8 @@ public class AvisoDispatchService : BackgroundService
             .Where(p => p.Activo && aviso.RolesDestino.Contains(p.Rol))
             .ToListAsync(cts);
 
+        var runToken = Guid.NewGuid().ToString("N")[..8];
+
         _logger.LogInformation("Despachando aviso {AvisoId} a {Count} destinatarios", aviso.Id, destinatarios.Count);
 
         foreach (var perfil in destinatarios)
@@ -75,7 +77,7 @@ public class AvisoDispatchService : BackgroundService
 
             if (aviso.EnviarWhatsapp && !string.IsNullOrEmpty(perfil.PhoneNumber))
             {
-                var result = await zavu.SendAsync(perfil.PhoneNumber!, aviso.MensajeTexto, "whatapp", idempotencyKey: $"aviso-{aviso.Id}-{perfil.Id}-whatsapp", cts: cts);
+                var result = await zavu.SendAsync(perfil.PhoneNumber!, aviso.MensajeTexto, "whatapp", idempotencyKey: $"aviso-{aviso.Id}-{runToken}-{perfil.Id}-whatsapp", cts: cts);
 
                 context.EnvioAvisoLogs.Add(new EnvioAvisoLog
                 {
@@ -92,7 +94,7 @@ public class AvisoDispatchService : BackgroundService
             {
                 var result = await zavu.SendAsync(
                     perfil.Email!, aviso.MensajeTexto, "email",
-                    idempotencyKey: $"aviso-{aviso.Id}-{perfil.Id}-email",
+                    idempotencyKey: $"aviso-{aviso.Id}-{runToken}-{perfil.Id}-email",
                     subject: aviso.AsuntoEmail ?? aviso.Titulo, cts: cts
                 );
 
