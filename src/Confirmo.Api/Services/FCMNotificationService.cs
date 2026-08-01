@@ -79,24 +79,30 @@ public class FCMNotificationService : IFCMNotificationService
 
         try
         {
+            var payload = new Dictionary<string, string>(data ?? new Dictionary<string, string>())
+            {
+                ["title"] = title,
+                ["body"] = body
+            };
             var message = new Message
             {
                 Token = fcmToken,
-                Notification = new Notification { Title = title, Body = body },
-                Data = data ?? new Dictionary<string, string>(),
+                //Notification = new Notification { Title = title, Body = body },
+                Data = payload,
                 Android = new AndroidConfig
                 {
                     Priority = Priority.High,
-                    Notification = new AndroidNotification
+                    /*Notification = new AndroidNotification
                     {
                         Icon = "ic_notification",
                         Color = "#197602",
                         ChannelId = "deposits_channel"
-                    }
+                    }*/
                 },
                 Apns = new ApnsConfig
                 {
-                    Aps = new Aps { Alert = new ApsAlert { Title = title, Body = body } }
+                    Aps = new Aps { ContentAvailable = true },
+                    Headers = new Dictionary<string, string> { ["apns-priority"] = "10" }
                 }
             };
 
