@@ -656,6 +656,46 @@ public static class DepositEndpoints
             return Results.Ok(new { depositId = deposit.Id, pendienteRegularizar = false });
         }).RequireAuthorization();
 
+        group.MapPost("/{id:guid}/mark-antiguo", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications, ILogger<Program> logger) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
+
+            deposit.Condicion = "antiguo";
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+            logger.LogInformation("Depósito {DepositId} marcado como antiguo manualmente por {UserId}", deposit.Id, userId);
+            return Results.Ok(new { depositId = deposit.Id, condicion = deposit.Condicion });
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Marcar un depósito como antiguo manualmente (Solo Finanzas/Admin)");
+
+        // POST: Desmarcar (vuelve Condicion a "actual")
+        group.MapPost("/{id:guid}/unmark-antiguo", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
+
+            deposit.Condicion = "actual";
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+
+            return Results.Ok(new { depositId = deposit.Id, condicion = deposit.Condicion });
+        }).RequireAuthorization();
+
         // PUT: Finazas/Admin sube la imagen nueva -- SOLO reemplaza el archivo
         group.MapPut("/{id:guid}/finance-regularize-image", async (
             Guid id, 
