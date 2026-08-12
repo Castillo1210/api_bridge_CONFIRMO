@@ -656,7 +656,7 @@ public static class DepositEndpoints
             return Results.Ok(new { depositId = deposit.Id, pendienteRegularizar = false });
         }).RequireAuthorization();
 
-        group.MapPost("/{id:guid}/mark-antiguo", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications, ILogger<Program> logger) =>
+        group.MapPost("/{id:guid}/mark-antiguo", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications, IChatService chat, IFCMNotificationService fcm, ILogger<Program> logger) =>
         {
             var userId = GetUserId(http);
             var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
@@ -668,6 +668,31 @@ public static class DepositEndpoints
 
             deposit.Condicion = "antiguo";
             await context.SaveChangesAsync();
+
+            var placeholders = ChatService.BuildDepositPlaceholders(deposit);
+            var mensajeChat = await chat.RenderPlantillaAsync("fecha_antigua", "chat", placeholders);
+            var mensajePush = await chat.RenderPlantillaAsync("fecha_antigua", "push", placeholders);
+
+            var alreadyHasMessage = await context.DepositMessages.AnyAsync(m => m.DepositId == deposit.Id && m.Content == mensajeChat);
+
+            if (!alreadyHasMessage)
+            {
+                await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
+                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, mensajeChat);
+
+                var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
+                if (vendedor?.FcmToken != null)
+                {
+                    try
+                    {
+                        await fcm.SendProcessingAsync(vendedor.FcmToken, mensajePush);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Error enviando FCM de 'antiguo' manual para deposito {DepositId}", deposit.Id);
+                    }
+                }
+            }
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
             logger.LogInformation("Depósito {DepositId} marcado como antiguo manualmente por {UserId}", deposit.Id, userId);

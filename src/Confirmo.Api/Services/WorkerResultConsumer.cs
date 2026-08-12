@@ -113,7 +113,11 @@ public class WorkerResultConsumer : BackgroundService
             var ruleResult = ApplyBusinessRules(deposit);
 
             deposit.Estado = DepositStates.Procesado;
-            deposit.Condicion = ruleResult.Condition;
+            if (deposit.Condicion != "antiguo")
+            {
+                deposit.Condicion = ruleResult.Condition;
+            }
+            
             deposit.Riesgo = true;
             deposit.Observaciones = "No se pudo extraer la información automáticamente del voucher, Completá y verificá los datos manualmente antes de confirmar.";
 
@@ -171,7 +175,11 @@ public class WorkerResultConsumer : BackgroundService
             else
             {
                 deposit.Estado = DepositStates.Procesado;
-                deposit.Condicion = ruleResult.Condition;
+                if (deposit.Condicion != "antiguo")
+                {
+                    deposit.Condicion = ruleResult.Condition;
+                }
+                
                 deposit.Riesgo = ruleResult.Risk;
 
                 await db.SaveChangesAsync();
@@ -239,7 +247,7 @@ public class WorkerResultConsumer : BackgroundService
         }
         
         // Regla 2: Validación de fecha -> poner condición
-        if (deposit.FechaDeposito.HasValue)
+        /*if (deposit.FechaDeposito.HasValue)
         {
             var fecha = deposit.FechaDeposito.Value;
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -256,7 +264,7 @@ public class WorkerResultConsumer : BackgroundService
             {
                 condition = "antiguo";
             }
-        }
+        }*/
 
         return new BusinessRuleResult(IsRejected: isRejected, Risk: risk, Condition: condition, RejectionReason: rejectionReason, UserMessage: userMessage);
     }
