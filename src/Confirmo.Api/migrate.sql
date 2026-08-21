@@ -1,23 +1,24 @@
 ﻿START TRANSACTION;
 
-CREATE TABLE public.avisos_imagenes_galeria (
+ALTER TABLE public.avisos ADD "ZavuPlantillaCodigo" text;
+
+CREATE TABLE public.zavu_plantillas (
     "Id" uuid NOT NULL DEFAULT (gen_random_uuid()),
-    "ObjectName" character varying(500) NOT NULL,
-    "ContentType" character varying(50) NOT NULL,
-    "Nombre" character varying(200),
+    "Nombre" character varying(200) NOT NULL,
+    "Codigo" character varying(100) NOT NULL,
+    "TemplateId" character varying(200) NOT NULL,
+    "Activo" boolean NOT NULL DEFAULT TRUE,
     "CreadoPor" uuid NOT NULL,
     "CreatedAt" timestamp with time zone NOT NULL DEFAULT (now()),
-    "Activo" boolean NOT NULL DEFAULT TRUE,
-    CONSTRAINT "PK_avisos_imagenes_galeria" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_avisos_imagenes_galeria_profiles_CreadoPor" FOREIGN KEY ("CreadoPor") REFERENCES public.profiles ("Id") ON DELETE RESTRICT
+    CONSTRAINT "PK_zavu_plantillas" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_zavu_plantillas_profiles_CreadoPor" FOREIGN KEY ("CreadoPor") REFERENCES public.profiles ("Id") ON DELETE RESTRICT
 );
 
-CREATE INDEX idx_avisos_imagenes_galeria_activo_created ON public.avisos_imagenes_galeria ("Activo", "CreatedAt");
+CREATE UNIQUE INDEX "IX_zavu_plantillas_Codigo" ON public.zavu_plantillas ("Codigo");
 
-CREATE INDEX "IX_avisos_imagenes_galeria_CreadoPor" ON public.avisos_imagenes_galeria ("CreadoPor");
+CREATE INDEX "IX_zavu_plantillas_CreadoPor" ON public.zavu_plantillas ("CreadoPor");
 
 INSERT INTO public.__ef_migrations ("MigrationId", "ProductVersion")
-VALUES ('20260801191012_AddImagenGaleria', '8.0.6');
+VALUES ('20260821231047_modavisos', '8.0.6');
 
 COMMIT;
-
