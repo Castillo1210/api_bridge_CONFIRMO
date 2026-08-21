@@ -23,6 +23,7 @@ public class Aviso
     public DateTimeOffset CreatedAt { get; set; }
     public string Estado { get; set; } = "programado";
     public bool Activo { get; set; } = true;
+    public string? ZavuPlantillaCodigo { get; set; }
 
     public Profile? Creador { get; set; }
 }

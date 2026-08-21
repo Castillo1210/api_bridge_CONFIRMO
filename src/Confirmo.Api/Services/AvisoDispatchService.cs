@@ -77,7 +77,28 @@ public class AvisoDispatchService : BackgroundService
 
             if (aviso.EnviarWhatsapp && !string.IsNullOrEmpty(perfil.PhoneNumber))
             {
-                var result = await zavu.SendAsync(perfil.PhoneNumber!, aviso.MensajeTexto, "whatapp", idempotencyKey: $"aviso-{aviso.Id}-{runToken}-{perfil.Id}-whatsapp", cts: cts);
+                ZavuSendResult result;
+                var plantilla = aviso.ZavuPlantillaCodigo != null ? await context.ZavuPlantillas.AsNoTracking().FirstOrDefaultAsync(z => z.Codigo == aviso.ZavuPlantillaCodigo && z.Activo, cts) : null;
+
+                if (plantilla != null)
+                {
+                    result = await zavu.SendTemplateAsync(
+                        perfil.PhoneNumber!,
+                        plantilla.TemplateId,
+                        new Dictionary<string, string>
+                        {
+                            ["1"] = perfil.FullName ?? "",
+                            ["2"] = aviso.MensajeTexto
+                        },
+                        idempotencyKey: $"aviso-{aviso.Id}-{runToken}-{perfil.Id}-whatsapp",
+                        cts: cts
+                    );
+                }
+                else
+                {
+                    _logger.LogWarning("Aviso {AvisoId} tiene WhatsApp activado sin plantilla de Zavu configurada; se omite el envío", aviso.Id);
+                    result = new ZavuSendResult(false, null, "Falta configurar ZavuTemplateId para este aviso");
+                }
 
                 context.EnvioAvisoLogs.Add(new EnvioAvisoLog
                 {

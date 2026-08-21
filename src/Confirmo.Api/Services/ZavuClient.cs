@@ -50,4 +50,44 @@ public class ZavuClient : IZavuClient
             return new ZavuSendResult(false, null, ex.Message);
         }
     }
+
+    public async Task<ZavuSendResult> SendTemplateAsync(string to, string templateId, Dictionary<string, string> templateVariables, string? idempotencyKey = null, CancellationToken cts = default)
+    {
+        try
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["to"] = to,
+                ["messageType"] = "template",
+                ["content"] = new Dictionary<string, object?>
+                {
+                    ["templateId"] = templateId,
+                    ["templateVariables"] = templateVariables
+                }
+            };
+
+            if (idempotencyKey != null)
+            {
+                payload["idempotencykey"] = idempotencyKey;
+            }
+
+            var response = await _http.PostAsJsonAsync("/v1/messages", payload, cts);
+            var body = await response.Content.ReadAsStringAsync(cts);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Zavu devolvió {Status} para plantilla {TemplateId}: {Body}", response.StatusCode, templateId, body);
+                return new ZavuSendResult(false, null, body);
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            var messageId = doc.RootElement.GetProperty("message").GetProperty("id").GetString();
+            return new ZavuSendResult(true, messageId, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error llamando a Zavu (plantilla {TemplateId})", templateId);
+            return new ZavuSendResult(false, null, ex.Message);
+        }
+    }
 }

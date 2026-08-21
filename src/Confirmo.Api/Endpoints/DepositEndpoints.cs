@@ -848,30 +848,34 @@ public static class DepositEndpoints
         // POSt: Comprobar duplicados de depósito
         group.MapPost("/check-duplicate", async ([FromBody] CheckDuplicateRequest request, AppDbContext context) =>
         {
-            var numeroOperacionLimpio = (request.NumeroOperacion ?? string.Empty).TrimStart('0');
-            if (string.IsNullOrEmpty(numeroOperacionLimpio))
+            var numeroOperacionNormalizado = NormalizarNumeroOperacionParaComparar(request.NumeroOperacion);
+
+            if (string.IsNullOrEmpty(numeroOperacionNormalizado))
             {
-                numeroOperacionLimpio = request.NumeroOperacion ?? string.Empty;
+                return Results.Ok(new { duplicates = Array.Empty<object>() });
             }
-            var patronNumeroOperacion = $"%{numeroOperacionLimpio}";
+
+            var patronPrefiltro = $"%{numeroOperacionNormalizado}";
 
             var query = context.Depositos
                 .Include(d => d.Sucursal)
                 .Include(d => d.Trabajador)
                 .AsNoTracking()
-                .Where(d => d.Estado == DepositStates.Confirmado && d.Monto == request.Monto && d.Moneda == request.Moneda && EF.Functions.ILike(d.NumeroOperacion, patronNumeroOperacion));
+                .Where(d => d.Estado == DepositStates.Confirmado && d.Monto == request.Monto && d.Moneda == request.Moneda && EF.Functions.ILike(d.NumeroOperacion, patronPrefiltro));
 
             if (request.ExcludeId.HasValue)
             {
                 query = query.Where(d => d.Id != request.ExcludeId.Value);
             }
 
-            var duplicates = await query.Select(d => new
-            {
-                id = d.Id,
-                sucursal = d.Sucursal,
-                trabajador = d.Trabajador
-            }).ToListAsync();
+            var candidatos = await query
+                .Select(d => new { d.Id, d.NumeroOperacion, d.Sucursal, d.Trabajador })
+                .ToListAsync();
+
+            var duplicates = candidatos
+                .Where(d => NormalizarNumeroOperacionParaComparar(d.NumeroOperacion) == numeroOperacionNormalizado)
+                .Select(d => new { id = d.Id, sucursal = d.Sucursal, trabajador = d.Trabajador })
+                .ToList();
 
             return Results.Ok(new { duplicates });
         }).RequireAuthorization().WithSummary("Comprobar depósitos duplicados");
@@ -1041,6 +1045,15 @@ public static class DepositEndpoints
         if (string.IsNullOrWhiteSpace(value)) return null;
         var soloDigitos = new string(value.Where(char.IsDigit).ToArray());
         return string.IsNullOrEmpty(soloDigitos) ? null : soloDigitos;
+    }
+
+    private static string NormalizarNumeroOperacionParaComparar(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var soloDigitos = new string(value.Where(char.IsDigit).ToArray());
+        if (string.IsNullOrEmpty(soloDigitos)) return string.Empty;
+        var sinCerosIniciales = soloDigitos.TrimStart('0');
+        return string.IsNullOrEmpty(sinCerosIniciales) ? "0" : sinCerosIniciales;
     }
 
     private static void ApplyEditableDepositFields(

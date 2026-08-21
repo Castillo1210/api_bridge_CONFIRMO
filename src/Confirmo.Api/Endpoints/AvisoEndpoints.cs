@@ -59,7 +59,8 @@ public static class AvisoEndpoints
                 CreadoPor = userId,
                 CreatedAt = DateTimeOffset.UtcNow,
                 Estado = "programado",
-                Activo = true
+                Activo = true,
+                ZavuPlantillaCodigo = request.ZavuPlantillaCodigo
             };
 
             context.Avisos.Add(aviso);
@@ -84,7 +85,7 @@ public static class AvisoEndpoints
                     a.Id, a.Titulo, a.MensajeTexto, a.MediaUrl, a.TipoMedia, a.RolesDestino,
                     a.EnviarApp, a.EnviarWhatsapp, a.EnviarEmail, a.AsuntoEmail,
                     a.EsRecurrente, a.Frecuencia, a.HoraEjecucion, a.DiaSemana, a.DiaMes, a.ProximaEjecucion, a.UltimaEjecucion,
-                    a.Estado, a.Activo, a.Creador != null ? a.Creador.FullName : null, a.CreatedAt
+                    a.Estado, a.Activo, a.Creador != null ? a.Creador.FullName : null, a.CreatedAt, a.ZavuPlantillaCodigo
                 )).ToListAsync();
 
             return Results.Ok(avisos);
@@ -105,7 +106,7 @@ public static class AvisoEndpoints
                     a.Id, a.Titulo, a.MensajeTexto, a.MediaUrl, a.TipoMedia, a.RolesDestino,
                     a.EnviarApp, a.EnviarWhatsapp, a.EnviarEmail, a.AsuntoEmail,
                     a.EsRecurrente, a.Frecuencia, a.HoraEjecucion, a.DiaSemana, a.DiaMes, a.ProximaEjecucion, a.UltimaEjecucion,
-                    a.Estado, a.Activo, null, a.CreatedAt
+                    a.Estado, a.Activo, null, a.CreatedAt, a.ZavuPlantillaCodigo
                 )).ToListAsync();
 
             return Results.Ok(avisos);
@@ -207,6 +208,7 @@ public static class AvisoEndpoints
             aviso.HoraEjecucion = request.HoraEjecucion;
             aviso.DiaSemana = request.DiaSemana;
             aviso.DiaMes = request.DiaMes;
+            aviso.ZavuPlantillaCodigo = request.ZavuPlantillaCodigo;
 
             if (aviso.Estado == "programado" && request.ProgramadoPara != null)
             {

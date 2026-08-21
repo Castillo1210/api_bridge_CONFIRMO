@@ -9,4 +9,10 @@ public interface IZavuClient
         string? idempotencyKey = null, string? subject = null,
         CancellationToken cts = default
     );
+
+    Task<ZavuSendResult> SendTemplateAsync(
+        string to, string templateId, Dictionary<string, string> templateVariables,
+        string? idempotencyKey = null,
+        CancellationToken cts = default
+    );
 }

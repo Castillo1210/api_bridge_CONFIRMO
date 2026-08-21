@@ -266,6 +266,18 @@ public class WorkerResultConsumer : BackgroundService
             }
         }*/
 
+        if (deposit.FechaDeposito.HasValue)
+        {
+            var (accion, confianza) = DepositBusinessRules.LeerVerificacionFecha(deposit.DatosOcr);
+            if (DepositBusinessRules.PuedeAutoclasificarAntiguo(accion, confianza))
+            {
+                if (deposit.FechaDeposito.Value < DepositBusinessRules.HoyPeru())
+                {
+                    condition = "antiguo";
+                }
+            }
+        }
+
         return new BusinessRuleResult(IsRejected: isRejected, Risk: risk, Condition: condition, RejectionReason: rejectionReason, UserMessage: userMessage);
     }
 

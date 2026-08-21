@@ -15,7 +15,8 @@ public record CreateAvisoRequest(
     TimeSpan? HoraEjecucion,
     int? DiaSemana,
     int? DiaMes,
-    DateTimeOffset? ProgramadoPara
+    DateTimeOffset? ProgramadoPara,
+    string? ZavuPlantillaCodigo
 );
 
 public record AvisoResponse(
@@ -39,7 +40,8 @@ public record AvisoResponse(
     string Estado,
     bool Activo,
     string? CreadoPorNombre,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    string? ZavuPlantillaCodigo
 );
 
 public record UpdateAvisoRequest(
@@ -57,7 +59,8 @@ public record UpdateAvisoRequest(
     TimeSpan? HoraEjecucion,
     int? DiaSemana,
     int? DiaMes,
-    DateTimeOffset? ProgramadoPara
+    DateTimeOffset? ProgramadoPara,
+    string? ZavuPlantillaCodigo
 );
 
 public record ReenviarAvisoRequest(DateTimeOffset? ProgramadoPara);
@@ -71,3 +74,9 @@ public record AvisoImagenGaleriaResponse(
 );
 
 public record UploadAvisoMediaRequest(string ImagenBase64, string? ContentType, string? Nombre = null);
+
+public record CreateZavuPlantillaRequest(string Nombre, string Codigo, string TemplateId);
+
+public record ZavuPlantillaResponse(
+    Guid Id, string Nombre, string Codigo, string TemplateId, bool Activo, DateTimeOffset CreatedAt
+);
