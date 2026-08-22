@@ -95,7 +95,7 @@ public static class ReportesEndpoints
             _ => new DateTime(hoyPeru.Year, hoyPeru.Month, 1)
         };
 
-        var desde = new DateTimeOffset(desdeFecha, PeruOffset);
+        var desde = new DateTimeOffset(desdeFecha, PeruOffset).ToUniversalTime();
         var hasta = DateTimeOffset.UtcNow;
 
         return (desde, hasta);

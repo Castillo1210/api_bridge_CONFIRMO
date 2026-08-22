@@ -133,10 +133,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - VISION_CREDENTIALS_PATH=/secrets/vision-ocr-sa.json
     volumes:
       - ./secrets/sa-key.json:/secrets/sa-key.json:ro
       - ./secrets/firebase-sa.json:/secrets/firebase-sa.json:ro
       - worker-logs:/app/logs
+      - ./secrets/vision-ocr-sa.json:/secrets/vision-ocr-sa.json:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -182,10 +184,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - VISION_CREDENTIALS_PATH=/secrets/vision-ocr-sa.json
     volumes:
       - ./secrets/sa-key.json:/secrets/sa-key.json:ro
       - ./secrets/firebase-sa.json:/secrets/firebase-sa.json:ro
       - worker-logs:/app/logs
+      - ./secrets/vision-ocr-sa.json:/secrets/vision-ocr-sa.json:ro
     depends_on:
       redis:
         condition: service_healthy
