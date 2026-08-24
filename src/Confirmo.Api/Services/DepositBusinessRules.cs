@@ -21,6 +21,13 @@ public static class DepositBusinessRules
 
     public static DateOnly HoyPeru() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ZonaPeru));
 
+    public static DateTimeOffset InicioDeDiaPeru(DateOnly dia)
+    {
+        var medianocheLocal = dia.ToDateTime(TimeOnly.MinValue);
+        var utc = TimeZoneInfo.ConvertTimeToUtc(medianocheLocal, ZonaPeru);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
+    }
+
     public static (string? accion, double? confianza) LeerVerificacionFecha(object? datosOcr)
     {
         if (datosOcr is null) return (null, null);

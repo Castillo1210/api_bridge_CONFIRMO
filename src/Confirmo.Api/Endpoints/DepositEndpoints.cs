@@ -721,6 +721,73 @@ public static class DepositEndpoints
             return Results.Ok(new { depositId = deposit.Id, condicion = deposit.Condicion });
         }).RequireAuthorization();
 
+        // POST: Restaurar un depósito RECHAZADO a "procesado"
+        group.MapPost("/{id:guid}/restore-to-pending", async (Guid id, HttpContext http, AppDbContext context, ISignalRNotificationService notifications, ILogger<Program> logger) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
+
+            if (deposit.Estado != DepositStates.Rechazado)
+                return Results.BadRequest(new { error = $"Solo se puede restaurar un depósito rechazado (estado actual: {deposit.Estado})." });
+
+            var oldStatus = deposit.Estado;
+            deposit.Estado = DepositStates.Procesado;
+            deposit.MotivoRechazo = null;
+            deposit.ValidadoPor = null;
+            deposit.FechaValidacion = null;
+            deposit.FechaBloqueo = null;
+            await context.SaveChangesAsync();
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, oldStatus);
+
+            logger.LogInformation("Depósito {DepositId} restaurado a pendiente por {UserId}", deposit.Id, userId);
+            return Results.Ok(new { depositId = deposit.Id, estado = deposit.Estado });
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Restaurar un depósito rechazado a pendiente (Solo Finanzas/Admin)");
+
+        group.MapPost("/pull-rezagados-a-hoy", async (HttpContext http, AppDbContext context, ISignalRNotificationService notifications, ILogger<Program> logger) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var inicioHoyUtc = DepositBusinessRules.InicioDeDiaPeru(DepositBusinessRules.HoyPeru());
+
+            var rezagados = await context.Depositos
+                .Where(d => d.Estado == DepositStates.Procesado && d.FechaRegistro < inicioHoyUtc)
+                .ToListAsync();
+
+            if (rezagados.Count == 0)
+                return Results.Ok(new { movedCount = 0, depositIds = Array.Empty<Guid>() });
+
+            var ahora = DateTimeOffset.UtcNow;
+            foreach (var deposito in rezagados)
+            {
+                deposito.FechaRegistro = ahora;
+                deposito.Condicion = "antiguo";
+            }
+            await context.SaveChangesAsync();
+
+            foreach (var deposito in rezagados)
+            {
+                await notifications.NotifyPanelDepositStatusChanged(deposito.Id, deposito.Estado, deposito.Estado);
+            }
+
+            logger.LogInformation("{Count} depósitos rezagados traídos a hoy por {UserId}", rezagados.Count, userId);
+            return Results.Ok(new { movedCount = rezagados.Count, depositIds = rezagados.Select(d => d.Id) });
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Traer a hoy los depósitos rezagados de días anteriores (Solo Finanzas/Admin)");
+
         // PUT: Finazas/Admin sube la imagen nueva -- SOLO reemplaza el archivo
         group.MapPut("/{id:guid}/finance-regularize-image", async (
             Guid id, 
