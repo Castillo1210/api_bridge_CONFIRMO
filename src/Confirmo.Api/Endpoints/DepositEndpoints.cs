@@ -611,13 +611,18 @@ public static class DepositEndpoints
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
 
             deposit.PendienteRegularizar = true;
-            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+
+            var registro = await context.DepositoRegularizaciones.FirstOrDefaultAsync(r => r.DepositoId == deposit.Id);
+            if (registro == null)
             {
-                DepositoId = deposit.Id,
-                Accion = "marcado",
-                UsuarioId = userId,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
+                registro = new DepositoRegularizacion { DepositoId = deposit.Id };
+                context.DepositoRegularizaciones.Add(registro);
+            }
+
+            registro.Accion = "marcado";
+            registro.UsuarioId = userId;
+            registro.CreatedAt = DateTimeOffset.UtcNow;
+
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
@@ -641,14 +646,16 @@ public static class DepositEndpoints
             var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
             if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado "});
 
-            deposit.PendienteRegularizar = false;
-            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+            var registro = await context.DepositoRegularizaciones.FirstOrDefaultAsync(r => r.DepositoId == deposit.Id);
+            if (registro == null)
             {
-                DepositoId = deposit.Id,
-                Accion = "desmarcado",
-                UsuarioId = userId,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
+                registro = new DepositoRegularizacion { DepositoId = deposit.Id };
+                context.DepositoRegularizaciones.Add(registro);
+            }
+
+            registro.Accion = "desmarcado";
+            registro.UsuarioId = userId;
+            registro.CreatedAt = DateTimeOffset.UtcNow;
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
@@ -761,8 +768,12 @@ public static class DepositEndpoints
 
             var inicioHoyUtc = DepositBusinessRules.InicioDeDiaPeru(DepositBusinessRules.HoyPeru());
 
+            var ventanaRezagados = inicioHoyUtc.AddDays(-5);
+
             var rezagados = await context.Depositos
-                .Where(d => d.Estado == DepositStates.Procesado && d.FechaRegistro < inicioHoyUtc)
+                .Where(d => d.Estado == DepositStates.Procesado 
+                            && d.FechaRegistro < inicioHoyUtc
+                            && d.FechaRegistro >= ventanaRezagados)
                 .ToListAsync();
 
             if (rezagados.Count == 0)
@@ -820,15 +831,19 @@ public static class DepositEndpoints
 
             deposit.ImagenVoucher = objectName;
             deposit.PendienteRegularizar = false;
-            context.DepositoRegularizaciones.Add(new DepositoRegularizacion
+            var registro = await context.DepositoRegularizaciones.FirstOrDefaultAsync(r => r.DepositoId == deposit.Id);
+            if (registro == null)
             {
-                DepositoId = deposit.Id,
-                Accion = "resuelto",
-                UsuarioId = userId,
-                CreatedAt = DateTimeOffset.UtcNow,
-                ImagenAnterior = imagenAnterior,
-                ImagenNueva = objectName
-            });
+                registro = new DepositoRegularizacion { DepositoId = deposit.Id };
+                context.DepositoRegularizaciones.Add(registro);
+            }
+
+            registro.Accion = "resuelto";
+            registro.UsuarioId = userId;
+            registro.CreatedAt = DateTimeOffset.UtcNow;
+            registro.ImagenAnterior = imagenAnterior;
+            registro.ImagenNueva = objectName;
+            
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);

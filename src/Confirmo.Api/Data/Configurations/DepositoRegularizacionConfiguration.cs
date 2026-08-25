@@ -26,5 +26,6 @@ public class DepositoRegularizacionConfiguration : IEntityTypeConfiguration<Depo
 
         builder.HasIndex(r => new { r.DepositoId, r.CreatedAt });
         builder.HasIndex(r => r.CreatedAt);
+        builder.HasIndex(r => r.DepositoId).IsUnique();
     }
 }
