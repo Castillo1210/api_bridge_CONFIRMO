@@ -21,6 +21,8 @@ public record RegularizacionHistorialDto(
     string? Cliente,
     string? EmpresaNombre,
     decimal Monto,
+    string? Moneda,
+    string? Anexo,
     string Accion,
     string? UsuarioNombre,
     DateTimeOffset CreatedAt,

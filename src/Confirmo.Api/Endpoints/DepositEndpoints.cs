@@ -184,6 +184,7 @@ public static class DepositEndpoints
                     r.Id, r.DepositoId,
                     r.Deposito!.NumeroOperacion, r.Deposito!.Cliente,
                     r.Deposito!.Empresa!.Nombre, r.Deposito!.Monto,
+                    r.Deposito!.Moneda, r.Deposito!.Anexo,
                     r.Accion,
                     r.Usuario != null ? r.Usuario.FullName : null,
                     r.CreatedAt, r.Motivo,
