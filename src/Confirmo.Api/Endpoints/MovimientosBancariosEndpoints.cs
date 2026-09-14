@@ -98,11 +98,16 @@ public static class MovimientosBancariosEndpoints
                 tipo = tipo[..200];
             }
 
-            const string sql = @"
+            // Npgsql no permite mas de una sentencia por comando cuando se usan parametros
+
+            await using var tx = await context.Database.BeginTransactionAsync(cts);
+
+            const string sqlUpdate = @"
                 UPDATE movimientos_bancarios
                 SET tipo = {2}
-                WHERE empresa = {0} AND id_origen = {1};
-                
+                WHERE empresa = {0} AND id_origen = {1}";
+
+            const string sqlUpsert = @"
                 INSERT INTO movimientos_tipo_pendientes (empresa, id_origen, tipo, deposito_id)
                 VALUES ({0}, {1}, {2}, {3})
                 ON CONFLICT (empresa, id_origen) DO UPDATE SET
@@ -112,7 +117,10 @@ public static class MovimientosBancariosEndpoints
                     procesado_en = NULL,
                     error = NULL;";
 
-            await context.Database.ExecuteSqlRawAsync(sql, empresaNormalizada, request.IdOrigen, tipo, (object?)request.DepositId ?? DBNull.Value);
+            await context.Database.ExecuteSqlRawAsync(sqlUpdate, empresaNormalizada, request.IdOrigen, tipo);
+            await context.Database.ExecuteSqlRawAsync(sqlUpsert, empresaNormalizada, request.IdOrigen, tipo, (object?)request.DepositId ?? DBNull.Value);
+
+            await tx.CommitAsync(cts);
 
             return Results.Ok(new { ok = true });
         })
