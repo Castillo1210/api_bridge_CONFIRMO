@@ -118,7 +118,7 @@ public static class MovimientosBancariosEndpoints
                     error = NULL;";
 
             await context.Database.ExecuteSqlRawAsync(sqlUpdate, empresaNormalizada, request.IdOrigen, tipo);
-            await context.Database.ExecuteSqlRawAsync(sqlUpsert, empresaNormalizada, request.IdOrigen, tipo, (object?)request.DepositId ?? DBNull.Value);
+            await context.Database.ExecuteSqlRawAsync(sqlUpsert, empresaNormalizada, request.IdOrigen, tipo, (object)request.DepositId!);
 
             await tx.CommitAsync(cts);
 
