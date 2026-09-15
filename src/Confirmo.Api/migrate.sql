@@ -1,9 +1,8 @@
 ﻿START TRANSACTION;
 
-CREATE UNIQUE INDEX "IX_deposito_regularizaciones_DepositoId" ON public.deposito_regularizaciones ("DepositoId");
+ALTER TABLE public.depositos ADD "NumeroTarjeta" character varying(30);
 
 INSERT INTO public.__ef_migrations ("MigrationId", "ProductVersion")
-VALUES ('20260825225054_UpRegularizaciones', '8.0.6');
+VALUES ('20260915194424_AddNumeroTarjetaToDepositos', '8.0.6');
 
 COMMIT;
-

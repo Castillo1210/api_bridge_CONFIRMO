@@ -172,6 +172,7 @@ public class ChatService : IChatService
             ["importe"] = $"{deposito.Moneda} {deposito.Monto:0.00}",
             ["cliente"] = deposito.Cliente,
             ["observaciones"] = observaciones ?? deposito.Observaciones,
+            ["numero_tarjeta"] = deposito.NumeroTarjeta, // NUEVO
         };
     }
 }

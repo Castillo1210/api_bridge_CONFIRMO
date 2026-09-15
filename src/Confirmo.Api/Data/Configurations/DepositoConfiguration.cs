@@ -28,6 +28,7 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.Property(d => d.TelefonoOrigen).HasMaxLength(20);
         builder.Property(d => d.Cuo).HasMaxLength(500);
         builder.Property(d => d.ImagenUrl).HasMaxLength(500);
+        builder.Property(d => d.NumeroTarjeta).HasMaxLength(30);
 
         // Indices
         builder.HasIndex(d => new { d.VendedorId, d.FechaRegistro }).HasDatabaseName("idx_depositos_vendedor_fecha");

@@ -13,6 +13,7 @@ public class Deposito
     public string? ImagenUrl { get; set; }
     public string? Anexo { get; set; }
     public string? NumeroOperacionBanco { get; set; }
+    public string? NumeroTarjeta { get; set; }  // Niubiz Pago con Link
     public DateOnly? FechaDeposito { get; set; }
     public string Estado { get; set; } = "recibido";
     public string? Observaciones { get; set; }

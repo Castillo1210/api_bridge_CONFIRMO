@@ -31,7 +31,8 @@ public record ConfirmDepositRequest(
     string? FechaDeposito,
     string? Cliente,
     string? RucCliente,
-    string? ReferenciaCliente
+    string? ReferenciaCliente,
+    string? NumeroTarjeta
 );
 
 public record RejectDepositRequest(
@@ -45,7 +46,8 @@ public record RejectDepositRequest(
     string? FechaDeposito,
     string? Cliente,
     string? RucCliente,
-    string? ReferenciaCliente
+    string? ReferenciaCliente,
+    string? NumeroTarjeta
 );
 
 public record ConfirmDepositResponse(

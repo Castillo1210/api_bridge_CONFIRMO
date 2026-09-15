@@ -62,7 +62,8 @@ public record DepositResponse(
     BancoResponse? Banco = null,
     SucursalResponse? Sucursal = null,
     TrabajadorResponse? Trabajador = null,
-    DateTimeOffset? FechaBloqueo = null
+    DateTimeOffset? FechaBloqueo = null,
+    string? NumeroTarjeta = null
 );
 
 public record DepositListResponse(
@@ -88,7 +89,8 @@ public record DepositListResponse(
     EmpresaResponse? Empresa = null,
     BancoResponse? Banco = null,
     bool PendienteRegularizar = false,
-    DateTimeOffset? FechaBloqueo = null
+    DateTimeOffset? FechaBloqueo = null,
+    string? NumeroTarjeta = null
 );
 
 public record DepositListPagedResponse(

@@ -327,7 +327,7 @@ public static class DepositEndpoints
                     d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Anexo, d.Condicion, d.Riesgo,
                     d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor, d.ImagenUrl,
                     d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar,
-                    d.FechaBloqueo)).ToListAsync();
+                    d.FechaBloqueo, d.NumeroTarjeta)).ToListAsync();
 
             return Results.Ok(new DepositListPagedResponse(items, total, page, pageSize));
         });
@@ -466,7 +466,7 @@ public static class DepositEndpoints
             var oldStatus = deposit.Estado;
             deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
-            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente);
+            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente, request?.NumeroTarjeta);
             deposit.ValidadoPor = userId;
             if (request?.Observaciones != null)
                 deposit.Observaciones = request.Observaciones;
@@ -474,8 +474,9 @@ public static class DepositEndpoints
             await context.SaveChangesAsync();
 
             var placeholders = ChatService.BuildDepositPlaceholders(deposit);
-            var mensajeChat = await chat.RenderPlantillaAsync("deposito_confirmado", "chat", placeholders);
-            var mensajePush = await chat.RenderPlantillaAsync("deposito_confirmado", "push", placeholders);
+            var plantillaCodigo = !string.IsNullOrWhiteSpace(deposit.NumeroTarjeta) ? "deposito_confirmado_tarjeta" : "deposito_confirmado";
+            var mensajeChat = await chat.RenderPlantillaAsync(plantillaCodigo, "chat", placeholders);
+            var mensajePush = await chat.RenderPlantillaAsync(plantillaCodigo, "push", placeholders);
 
             if (deposit.Anexo == "LCRED MN")
             {
@@ -568,7 +569,7 @@ public static class DepositEndpoints
             deposit.Estado = DepositStates.Rechazado;
             deposit.ValidadoPor = userId;
             deposit.Observaciones = request.Observaciones;
-            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente);
+            ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente, request?.NumeroTarjeta);
 
             await context.SaveChangesAsync();
 
@@ -1095,7 +1096,7 @@ public static class DepositEndpoints
             d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,
             d.Sucursal != null ? new SucursalResponse(d.Sucursal.Id, d.Sucursal.EmpresaId, d.Sucursal.Nombre, d.Sucursal.Direccion, d.Sucursal.Activo) : null,
             d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null,
-            d.FechaBloqueo
+            d.FechaBloqueo, d.NumeroTarjeta
         );
     }
 
@@ -1150,7 +1151,8 @@ public static class DepositEndpoints
         string? fechaDeposito,
         string? cliente,
         string? rucCliente,
-        string? referenciaCliente
+        string? referenciaCliente, 
+        string? numeroTarjeta
     )
     {
         if (!string.IsNullOrWhiteSpace(anexo))
@@ -1202,6 +1204,11 @@ public static class DepositEndpoints
         if (!string.IsNullOrWhiteSpace(referenciaCliente))
         {
             deposit.ReferenciaCliente = referenciaCliente;
+        }
+
+        if (!string.IsNullOrWhiteSpace(numeroTarjeta))
+        {
+            deposit.NumeroTarjeta = numeroTarjeta;
         }
     }
 }
