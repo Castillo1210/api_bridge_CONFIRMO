@@ -467,6 +467,17 @@ public static class DepositEndpoints
             deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
             ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente, request?.NumeroTarjeta);
+
+            var bancoCodigo = await context.Bancos.AsNoTracking()
+                .Where(b => b.Id == deposit.BancoId)
+                .Select(b => b.Codigo)
+                .FirstOrDefaultAsync();
+
+            if (string.Equals(bancoCodigo, "NIUBIZ", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(deposit.NumeroTarjeta))
+            {
+                return Results.BadRequest(new { error = "Los depósitos Niubiz (Pago con Link) requieren el número de Tarjeta antes de confirmar." });
+            }
+
             deposit.ValidadoPor = userId;
             if (request?.Observaciones != null)
                 deposit.Observaciones = request.Observaciones;
