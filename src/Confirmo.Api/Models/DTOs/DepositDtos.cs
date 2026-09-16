@@ -31,6 +31,18 @@ public record RegularizacionHistorialDto(
     string? ImagenNueva
 );
 
+public record RechazoHistorialDto(
+    Guid Id,
+    Guid DepositoId,
+    string? ImagenVoucherRechazada,
+    string? MotivoRechazo,
+    string? Observaciones,
+    DateTimeOffset? FechaRechazo,
+    string? RechazadoPorNombre,
+    string? RegularizadoPorNombre,
+    DateTimeOffset CreatedAt
+);
+
 public record DepositResponse(
     Guid Id,
     string NumeroOperacion,

@@ -227,6 +227,48 @@ public static class DepositEndpoints
             return Results.Redirect(signedUrl);
         });
 
+        group.MapGet("/{id:guid}/rechazos-historial", async (Guid id, HttpContext http, AppDbContext context) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var result = await context.DepositoRechazosHistorial
+                .AsNoTracking()
+                .Where(r => r.DepositoId == id)
+                .Include(r => r.Rechazador)
+                .Include(r => r.Regularizador)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new RechazoHistorialDto(
+                    r.Id, r.DepositoId, r.ImagenVoucherRechazada, r.MotivoRechazo, r.Observaciones,
+                    r.FechaRechazo,
+                    r.Rechazador != null ? r.Rechazador.FullName : null,
+                    r.Regularizador != null ? r.Regularizador.FullName : null,
+                    r.CreatedAt
+                )).ToListAsync();
+
+            return Results.Ok(result);
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Historial de rechazos regularizados de un depósito (Solo Finanzas)");
+
+        group.MapGet("/rechazos-historial/{id:guid}/imagen", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var registro = await context.DepositoRechazosHistorial.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+            if (registro == null || string.IsNullOrEmpty(registro.ImagenVoucherRechazada))
+                return Results.NotFound();
+
+            var signedUrl = await storage.GetSignedUrlAsync(registro.ImagenVoucherRechazada);
+            return Results.Redirect(signedUrl);
+        });
+
         // GET: un depósito
         group.MapGet("/{id:guid}", async (Guid id, HttpContext http, AppDbContext context, IStorageService storage) =>
         {
@@ -906,6 +948,17 @@ public static class DepositEndpoints
             }
 
             var objectName = await storage.UploadVoucherAsync(user.EmpresaId, userId, imageBytes, DetectContentType(imageBytes));
+
+            context.DepositoRechazosHistorial.Add(new DepositoRechazoHistorial
+            {
+                DepositoId = deposit.Id,
+                ImagenVoucherRechazada = deposit.ImagenVoucher,
+                MotivoRechazo = deposit.MotivoRechazo,
+                Observaciones = deposit.Observaciones,
+                FechaRechazo = deposit.FechaValidacion,
+                RechazadoPor = deposit.ValidadoPor,
+                RegularizadoPor = userId
+            });
 
             var oldStatus = deposit.Estado;
             deposit.ImagenVoucher = objectName;
