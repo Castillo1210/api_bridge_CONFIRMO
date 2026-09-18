@@ -28,7 +28,8 @@ public record RegularizacionHistorialDto(
     DateTimeOffset CreatedAt,
     string? Motivo,
     string? ImagenAnterior,
-    string? ImagenNueva
+    string? ImagenNueva,
+    DateOnly? FechaDeposito
 );
 
 public record RechazoHistorialDto(

@@ -188,7 +188,8 @@ public static class DepositEndpoints
                     r.Accion,
                     r.Usuario != null ? r.Usuario.FullName : null,
                     r.CreatedAt, r.Motivo,
-                    r.ImagenAnterior, r.ImagenNueva))
+                    r.ImagenAnterior, r.ImagenNueva,
+                    r.Deposito!.FechaDeposito))
                 .ToListAsync();
 
             return Results.Ok(result);
