@@ -17,6 +17,7 @@ public class DepositoConfiguration : IEntityTypeConfiguration<Deposito>
         builder.Property(d => d.Monto).HasPrecision(12, 2).IsRequired();
         builder.Property(d => d.Moneda).IsRequired().HasMaxLength(3);
         builder.Property(d => d.FechaRegistro).HasDefaultValueSql("now()");
+        builder.Property(d => d.FechaRegistroOriginal).HasDefaultValueSql("now()");
         builder.Property(d => d.ImagenVoucher).HasMaxLength(500);
         builder.Property(d => d.Estado).IsRequired().HasMaxLength(20).HasDefaultValue("recibido");
         builder.Property(d => d.Observaciones).HasMaxLength(1000);

@@ -76,7 +76,8 @@ public record DepositResponse(
     SucursalResponse? Sucursal = null,
     TrabajadorResponse? Trabajador = null,
     DateTimeOffset? FechaBloqueo = null,
-    string? NumeroTarjeta = null
+    string? NumeroTarjeta = null,
+    DateTimeOffset? FechaRegistroOriginal = null
 );
 
 public record DepositListResponse(

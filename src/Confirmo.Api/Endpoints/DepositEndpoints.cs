@@ -59,7 +59,8 @@ public static class DepositEndpoints
                 VendedorId = userId,
                 TrabajadorId = trabajador.Id,
                 Estado = DepositStates.Recibido,
-                FechaRegistro = DateTimeOffset.UtcNow
+                FechaRegistro = DateTimeOffset.UtcNow,
+                FechaRegistroOriginal = DateTimeOffset.UtcNow
             };
 
             context.Depositos.Add(deposit);
@@ -127,7 +128,8 @@ public static class DepositEndpoints
                         VendedorId = userId,
                         TrabajadorId = trabajador.Id,
                         Estado = DepositStates.Recibido,
-                        FechaRegistro = DateTimeOffset.UtcNow
+                        FechaRegistro = DateTimeOffset.UtcNow,
+                        FechaRegistroOriginal = DateTimeOffset.UtcNow
                     };
 
                     context.Depositos.Add(deposit);
@@ -712,6 +714,9 @@ public static class DepositEndpoints
             registro.Accion = "desmarcado";
             registro.UsuarioId = userId;
             registro.CreatedAt = DateTimeOffset.UtcNow;
+
+            deposit.PendienteRegularizar = false;
+
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
@@ -969,6 +974,9 @@ public static class DepositEndpoints
             deposit.EmpresaId = Guid.TryParse(request.EmpresaId, out var eId) ? eId : null;
             deposit.MotivoRechazo = null;
             deposit.FechaValidacion = null;
+            deposit.FechaBloqueo = null;
+            deposit.ValidadoPor = null;
+            deposit.Anexo = null;
             deposit.ErrorIds = Array.Empty<Guid>();
             deposit.WarningIds = Array.Empty<Guid>();
 
@@ -1161,7 +1169,7 @@ public static class DepositEndpoints
             d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null,
             d.Sucursal != null ? new SucursalResponse(d.Sucursal.Id, d.Sucursal.EmpresaId, d.Sucursal.Nombre, d.Sucursal.Direccion, d.Sucursal.Activo) : null,
             d.Trabajador != null ? new TrabajadorResponse(d.Trabajador.Id, d.Trabajador.ProfileId, d.Trabajador.Nombre, d.Trabajador.TelefonoPersonal, d.Trabajador.EmpresaId, d.Trabajador.SucursalId, d.Trabajador.Activo, d.Trabajador.FechaInicio, d.Trabajador.FechaFin) : null,
-            d.FechaBloqueo, d.NumeroTarjeta
+            d.FechaBloqueo, d.NumeroTarjeta, d.FechaRegistroOriginal
         );
     }
 

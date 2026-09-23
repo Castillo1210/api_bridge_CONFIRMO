@@ -9,6 +9,7 @@ public class Deposito
     public decimal Monto { get; set; }
     public string Moneda { get; set; } = string.Empty;
     public DateTimeOffset FechaRegistro { get; set; }
+    public DateTimeOffset? FechaRegistroOriginal { get; set; }
     public string? ImagenVoucher { get; set; }
     public string? ImagenUrl { get; set; }
     public string? Anexo { get; set; }
