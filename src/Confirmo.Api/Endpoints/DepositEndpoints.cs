@@ -172,6 +172,7 @@ public static class DepositEndpoints
             var query = context.DepositoRegularizaciones
                 .AsNoTracking()
                 .Include(r => r.Deposito!).ThenInclude(d => d.Empresa)
+                .Include(r => r.Deposito!).ThenInclude(d => d.Sucursal)
                 .Include(r => r.Usuario)
                 .AsQueryable();
 
@@ -191,7 +192,8 @@ public static class DepositEndpoints
                     r.Usuario != null ? r.Usuario.FullName : null,
                     r.CreatedAt, r.Motivo,
                     r.ImagenAnterior, r.ImagenNueva,
-                    r.Deposito!.FechaDeposito))
+                    r.Deposito!.FechaDeposito,
+                    r.Deposito!.Sucursal!.Nombre))
                 .ToListAsync();
 
             return Results.Ok(result);

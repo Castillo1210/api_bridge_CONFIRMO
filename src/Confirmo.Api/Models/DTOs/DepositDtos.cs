@@ -29,7 +29,8 @@ public record RegularizacionHistorialDto(
     string? Motivo,
     string? ImagenAnterior,
     string? ImagenNueva,
-    DateOnly? FechaDeposito
+    DateOnly? FechaDeposito,
+    string? SucursalNombre
 );
 
 public record RechazoHistorialDto(
