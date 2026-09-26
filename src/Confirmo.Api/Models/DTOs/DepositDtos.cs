@@ -99,6 +99,7 @@ public record DepositListResponse(
     Guid? BancoId,
     Guid? EmppresaId,
     Guid? TrabajadorId,
+    Guid? VendedorId,
     Guid? ValidadoPor,
     string? ImagenUrl,
     EmpresaResponse? Empresa = null,

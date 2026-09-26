@@ -331,6 +331,7 @@ public static class DepositEndpoints
             [FromQuery] string? estado,
             [FromQuery] DateTimeOffset? desde,
             [FromQuery] DateTimeOffset? hasta,
+            [FromQuery] Guid? vendedorId,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20) =>
         {
@@ -342,6 +343,11 @@ public static class DepositEndpoints
             if (!isFinanceOrAdmin)
             {
                 query = query.Where(d => d.VendedorId == userId);
+            }
+
+            if (vendedorId.HasValue)
+            {
+                query = query.Where(d => d.VendedorId == vendedorId.Value);
             }
 
             if (!string.IsNullOrEmpty(cliente))
@@ -372,7 +378,7 @@ public static class DepositEndpoints
                 .Take(pageSize)
                 .Select(d => new DepositListResponse(
                     d.Id, d.NumeroOperacion, d.Cliente, d.Monto, d.Moneda, d.FechaRegistro, d.Estado, d.Anexo, d.Condicion, d.Riesgo,
-                    d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.ValidadoPor, d.ImagenUrl,
+                    d.NumeroOperacionBanco, d.FechaDeposito, d.ImagenVoucher, d.SucursalId, d.BancoId, d.EmpresaId, d.TrabajadorId, d.VendedorId, d.ValidadoPor, d.ImagenUrl,
                     d.Empresa != null ? new EmpresaResponse(d.Empresa.Id, d.Empresa.Nombre, d.Empresa.Logo) : null, d.Banco != null ? new BancoResponse(d.Banco.Id, d.Banco.Nombre, d.Banco.Codigo) : null, d.PendienteRegularizar,
                     d.FechaBloqueo, d.NumeroTarjeta)).ToListAsync();
 
