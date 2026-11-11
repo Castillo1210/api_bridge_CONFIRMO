@@ -536,6 +536,9 @@ public static class DepositEndpoints
             if (request?.Observaciones != null)
                 deposit.Observaciones = request.Observaciones;
 
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, "confirmado",
+                new { monto = deposit.Monto, moneda = deposit.Moneda, bancoId = deposit.BancoId });
+
             await context.SaveChangesAsync();
 
             var placeholders = ChatService.BuildDepositPlaceholders(deposit);
@@ -635,6 +638,8 @@ public static class DepositEndpoints
             deposit.ValidadoPor = userId;
             deposit.Observaciones = request.Observaciones;
             ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente, request?.NumeroTarjeta);
+
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, "rechazado", new { motivo = request!.Observaciones });
 
             await context.SaveChangesAsync();
 
@@ -818,6 +823,9 @@ public static class DepositEndpoints
             deposit.ValidadoPor = null;
             deposit.FechaValidacion = null;
             deposit.FechaBloqueo = null;
+
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, "restaurado_pendiente");
+
             await context.SaveChangesAsync();
 
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, oldStatus);
@@ -910,6 +918,8 @@ public static class DepositEndpoints
                 CreatedAt = DateTimeOffset.UtcNow
             });
 
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, "datos_corregidos", new { campos = cambios.Select(c => c.Campo).ToArray() });
+
             await context.SaveChangesAsync();
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
 
@@ -996,6 +1006,8 @@ public static class DepositEndpoints
                 Cambios = System.Text.Json.JsonSerializer.Serialize(cambios, JsonCamel),
                 CreatedAt = DateTimeOffset.UtcNow
             });
+
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, destino == "pendiente" ? "revertido_pendiente" : "revertido_rechazado", new { motivo });
 
             await context.SaveChangesAsync();
 
@@ -1325,6 +1337,8 @@ public static class DepositEndpoints
                 });
             }
 
+            BitacoraDeposito.Registrar(context, deposit.Id, userId, "tomado", 
+                lockExpired && deposit.ValidadoPor.HasValue && deposit.ValidadoPor != userId ? new { candadoVencidoDe = deposit.ValidadoPor } : null);
             deposit.ValidadoPor = userId;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
             deposit.FechaBloqueo = DateTimeOffset.UtcNow;
@@ -1349,6 +1363,7 @@ public static class DepositEndpoints
                 deposit.ValidadoPor = null;
                 deposit.FechaBloqueo = null;
                 deposit.FechaValidacion = null;
+                BitacoraDeposito.Registrar(context, deposit.Id, userId, "liberado");
                 await context.SaveChangesAsync();
                 await notifications.NotifyPanelDepositUnlocked(id);
             }

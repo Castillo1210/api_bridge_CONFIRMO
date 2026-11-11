@@ -497,6 +497,55 @@ namespace Confirmo.Api.Migrations
                     b.ToTable("deposito_correcciones", "public");
                 });
 
+            modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoEvento", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("DepositoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Evento")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Metadata")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("OcurridoEn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("RegistradoEn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("SesionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepositoId", "OcurridoEn");
+
+                    b.HasIndex("Evento", "OcurridoEn");
+
+                    b.HasIndex("UsuarioId", "OcurridoEn");
+
+                    b.ToTable("deposito_eventos", "public");
+                });
+
             modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoRechazoHistorial", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1121,6 +1170,24 @@ namespace Confirmo.Api.Migrations
                     b.Navigation("Deposito");
 
                     b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoEvento", b =>
+                {
+                    b.HasOne("Confirmo.Api.Models.Entities.Deposito", "Deposito")
+                        .WithMany()
+                        .HasForeignKey("DepositoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Confirmo.Api.Models.Entities.Profile", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Deposito");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoRechazoHistorial", b =>

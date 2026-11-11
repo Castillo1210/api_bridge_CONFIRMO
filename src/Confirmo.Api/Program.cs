@@ -155,6 +155,7 @@ app.MapSyncStatusEndpoints();
 app.MapAvisoEndpoints();
 app.MapZavuPlantillaEndpoints();
 app.MapReportesEndpoints();
+app.MapDepositEventEndpoints();
 
 // SignalR Hub
 app.MapHub<DepositHub>("/hubs/deposits");
