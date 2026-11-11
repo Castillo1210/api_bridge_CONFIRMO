@@ -71,7 +71,8 @@ public record UpdateTrabajadorRequest(
     string Nombre,
     string? TelefonoPersonal,
     Guid? SucursalId,
-    bool Activo
+    bool Activo,
+    Guid? ProfileId = null
 );
 
 // Profiles

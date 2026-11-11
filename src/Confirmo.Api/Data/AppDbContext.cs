@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<AvisoImagenGaleria> AvisosImagenesGaleria => Set<AvisoImagenGaleria>();
     public DbSet<ZavuPlantilla> ZavuPlantillas => Set<ZavuPlantilla>();
     public DbSet<DepositoRechazoHistorial> DepositoRechazosHistorial => Set<DepositoRechazoHistorial>();
+    public DbSet<DepositoCorreccion> DepositoCorrecciones => Set<DepositoCorreccion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

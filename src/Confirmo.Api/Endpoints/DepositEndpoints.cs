@@ -7,6 +7,7 @@ using Confirmo.Api.Models.Entities;
 using Confirmo.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
@@ -828,6 +829,259 @@ public static class DepositEndpoints
         .WithTags("Deposits")
         .WithSummary("Restaurar un depósito rechazado a pendiente (Solo Finanzas/Admin)");
 
+
+        group.MapPut("/{id:guid}/correccion", async (
+            Guid id,
+            HttpContext http,
+            [FromBody] CorregirDepositoRequest request,
+            AppDbContext context,
+            IStorageService storage,
+            ISignalRNotificationService notifications,
+            ILogger<Program> logger
+        ) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || user.Rol != "admin")
+                return Results.Forbid();
+
+            var motivo = request.Motivo?.Trim();
+            if (string.IsNullOrWhiteSpace(motivo) || motivo.Length < 5)
+                return Results.BadRequest(new { error = "El motivo es obligatorio (mínimo 5 caracteres.)" });
+
+            var deposit = await context.Depositos.FirstOrDefaultAsync(d => d.Id == id);
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado. " });
+
+            if (deposit.Estado != DepositStates.Confirmado)
+                return Results.BadRequest(new { error = $"Solo se pueden corregir depósitos confirmados (estado actual: {deposit.Estado})." });
+
+            var antes = SnapshotCamposEditables(deposit);
+            ApplyEditableDepositFields(deposit, request.Anexo, request.NumeroOperacion, request.EmpresaId, request.BancoId,
+                request.Monto, request.Moneda, request.FechaDeposito, request.Cliente, deposit.RucCliente, deposit.ReferenciaCliente, request.NumeroTarjeta);
+
+            var despues = SnapshotCamposEditables(deposit);
+
+            var cambios = antes.Keys
+                .Where(k => !string.Equals(antes[k], despues[k], StringComparison.Ordinal))
+                .Select(k => new CambioCampoDto(k, antes[k], despues[k]))
+                .ToList();
+
+            if (cambios.Count == 0)
+                return Results.BadRequest(new { error = "No hay cambios para guardar. "});
+
+            var bancoCodigo = await context.Bancos.AsNoTracking()
+                .Where(b => b.Id == deposit.BancoId).Select(b => b.Codigo).FirstOrDefaultAsync();
+
+            if (string.Equals(bancoCodigo, "NIUBIZ", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(deposit.NumeroTarjeta))
+                return Results.BadRequest(new { error = "Los depósitos Niubiz requieren el número de Tarjeta." });
+            
+            var tocaDuplicado = cambios.Any(c => c.Campo is "numeroOperacion" or "monto" or "moneda");
+            if (tocaDuplicado)
+            {
+                var normalizado = NormalizarNumeroOperacionParaComparar(deposit.NumeroOperacion);
+                if (!string.IsNullOrEmpty(normalizado))
+                {
+                    var patron = $"%{normalizado}";
+                    var candidatos = await context.Depositos.AsNoTracking()
+                        .Include(d => d.Sucursal)
+                        .Where(d => d.Id != deposit.Id
+                            && d.Estado == DepositStates.Confirmado
+                            && d.Monto == deposit.Monto
+                            && d.Moneda == deposit.Moneda
+                            && EF.Functions.ILike(d.NumeroOperacion, patron))
+                        .Select(d => new { d.Id, d.NumeroOperacion, Sucursal = d.Sucursal != null ? d.Sucursal.Nombre : null })
+                        .ToListAsync();
+
+                    var dup = candidatos.FirstOrDefault(d => NormalizarNumeroOperacionParaComparar(d.NumeroOperacion) == normalizado);
+                    if (dup != null)
+                        return Results.Conflict(new { error = $"DUPLICADO: ya existe un depósito confirmado con esa operación, monto y moneda (sucursal {dup.Sucursal ?? "N/A"}).", duplicateId = dup.Id});
+                }
+            }
+
+            context.DepositoCorrecciones.Add(new DepositoCorreccion
+            {
+                DepositoId = deposit.Id,
+                Accion = "correccion_datos",
+                ProfileId = userId,
+                Motivo = motivo,
+                EstadoAnterior = deposit.Estado,
+                EstadoNuevo = deposit.Estado,
+                Cambios = System.Text.Json.JsonSerializer.Serialize(cambios, JsonCamel),
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await context.SaveChangesAsync();
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, deposit.Estado);
+
+            logger.LogInformation("Depósito {DepositId} corregido por admin {UserId}: {Campos}", deposit.Id, userId, string.Join(",", cambios.Select(c => c.Campo)));
+
+            var actualizado = await context.Depositos.AsNoTracking()
+                .Include(d => d.Empresa).Include(d => d.Banco).Include(d => d.Sucursal).Include(d => d.Trabajador)
+                .FirstAsync(d => d.Id == deposit.Id);
+            
+            return Results.Ok(await MapToResponseAsync(actualizado, storage));
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Corregir datos de un depósito confirmado (Solo Admin)");
+
+        //POST: Revertir un depósito CONFIRMADO a pendiente o rechazado (Solo Admin)
+        group.MapPost("/{id:guid}/revertir", async (
+            Guid id,
+            HttpContext http,
+            [FromBody] RevertirDepositoRequest request,
+            AppDbContext context,
+            IStorageService storage,
+            ISignalRNotificationService notifications,
+            IFCMNotificationService fcm,
+            IChatService chat,
+            ILogger<Program> logger
+        ) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || user.Rol != "admin")
+                return Results.Forbid();
+
+            var motivo = request.Motivo?.Trim();
+            if (string.IsNullOrWhiteSpace(motivo) || motivo.Length < 5)
+                return Results.BadRequest(new { error = "El motivo es obligatorio (mínimo 5 caracteres)." });
+
+            var destino = (request.Destino ?? "").Trim().ToLowerInvariant();
+            if (destino != "pendiente" && destino != "rechazado")
+                return Results.BadRequest(new { error = "Destino inválido. Use 'pendiente' o 'rechazado'." });
+
+            var deposit = await context.Depositos
+                .Include(d => d.Empresa).Include(d => d.Sucursal).Include(d => d.Banco)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (deposit == null) return Results.NotFound(new { error = "Depósito no encontrado" });
+
+            if (deposit.Estado != DepositStates.Confirmado)
+                return Results.BadRequest(new { error = $"Solo se pueden revertir depósitos confirmados (estado actual: {deposit.Estado})." });
+
+            var oldStatus = deposit.Estado;
+            var oldAnexo = deposit.Anexo;
+            var cambios = new List<CambioCampoDto> { new("estado", oldStatus, null) };
+
+            if (destino == "pendiente")
+            {
+                deposit.Estado = DepositStates.Procesado;
+                deposit.ValidadoPor = null;
+                deposit.FechaValidacion = null;
+                deposit.FechaBloqueo = null;
+                deposit.Anexo = null;
+            }
+            else
+            {
+                deposit.Estado = DepositStates.Rechazado;
+                deposit.ValidadoPor = userId;
+                deposit.FechaValidacion = DateTimeOffset.UtcNow;
+                deposit.Observaciones = motivo;
+                deposit.MotivoRechazo = motivo;
+            }
+            cambios[0] = new CambioCampoDto("estado", oldStatus, deposit.Estado);
+            
+            if (destino == "pendiente" && oldAnexo != null)
+                cambios.Add(new CambioCampoDto("anexo", oldAnexo, null));
+
+            context.DepositoCorrecciones.Add(new DepositoCorreccion
+            {
+                DepositoId = deposit.Id,
+                Accion = destino == "pendiente" ? "revertido_pendiente" : "revertido_rechazado",
+                ProfileId = userId,
+                Motivo = motivo,
+                EstadoAnterior = oldStatus,
+                EstadoNuevo = deposit.Estado,
+                Cambios = System.Text.Json.JsonSerializer.Serialize(cambios, JsonCamel),
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+
+            await context.SaveChangesAsync();
+
+            // ==== Aviso al vendedor: chat + push
+            var vendedor = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == deposit.VendedorId);
+            var operacion = deposit.NumeroOperacionBanco ?? deposit.NumeroOperacion;
+            var importe = $"{deposit.Moneda} {deposit.Monto:0.00}";
+
+            if (destino == "pendiente")
+            {
+                var mensaje = $"🔄 Tu depósito (Op. {operacion}, {importe}) fue devuelto a revisión por Finanzas. Motivo: {motivo}";
+                await chat.AddSystemMessageAsync(deposit.Id, mensaje);
+                await notifications.NotifyDepositProcessing(deposit.VendedorId, deposit.Id, mensaje);
+                if (vendedor?.FcmToken != null)
+                {
+                    try
+                    {
+                        await fcm.SendProcessingAsync(vendedor.FcmToken, mensaje);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Error enviando FCM de reversión a pendiente");
+                    }
+                }
+            }
+            else
+            {
+                var placeholders = ChatService.BuildDepositPlaceholders(deposit, motivo);
+                var mensajeChat = await chat.RenderPlantillaAsync("deposito_rechazado", "chat", placeholders);
+                var mensajePush = await chat.RenderPlantillaAsync("deposito_rechazado", "push", placeholders);
+                await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
+                await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, motivo);
+                if (vendedor?.FcmToken != null)
+                {
+                    try
+                    {
+                        await fcm.SendDepositRejectedAsync(vendedor.FcmToken, motivo, body: mensajePush);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Error enviando FCM de reversión a rechazado");
+                    }
+                }
+            }
+
+            await notifications.NotifyPanelDepositStatusChanged(deposit.Id, deposit.Estado, oldStatus);
+            logger.LogInformation("Depósito {DepositId} revertido de {Old} a {New} por admin {UserId}", deposit.Id, oldStatus, deposit.Estado, userId);
+
+            var actualizado = await context.Depositos.AsNoTracking()
+                .Include(d => d.Empresa).Include(d => d.Banco).Include(d => d.Sucursal).Include(d => d.Trabajador)
+                .FirstAsync(d => d.Id == deposit.Id);
+
+            return Results.Ok(await MapToResponseAsync(actualizado, storage));
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Revertir un depósito confirmado a pendiente o rechazado (Solo Admin)");
+
+
+        // GET: Historial de correcciones de un depósito (finanzas/admin)
+        group.MapGet("/{id:guid}/correcciones", async (
+            Guid id,
+            HttpContext http,
+            AppDbContext context
+        ) =>
+        {
+            var userId = GetUserId(http);
+            var user = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == userId);
+            if (user == null || (user.Rol != "finanzas" && user.Rol != "admin"))
+                return Results.Forbid();
+
+            var items = await context.DepositoCorrecciones.AsNoTracking()
+                .Where(c => c.DepositoId == id)
+                .OrderByDescending(c => c.CreatedAt)
+                .Select(c => new DepositoCorreccionDto(
+                    c.Id, c.DepositoId, c.Accion, c.Motivo, c.EstadoAnterior, c.EstadoNuevo, c.Cambios,
+                    c.Profile != null ? c.Profile.FullName : null,
+                    c.CreatedAt
+                )).ToListAsync();
+
+            return Results.Ok(items);
+        })
+        .RequireAuthorization()
+        .WithTags("Deposits")
+        .WithSummary("Historial de correcciones/reversiones de un depósito");
+
         group.MapPost("/pull-rezagados-a-hoy", async (HttpContext http, AppDbContext context, ISignalRNotificationService notifications, ILogger<Program> logger) =>
         {
             var userId = GetUserId(http);
@@ -1292,6 +1546,22 @@ public static class DepositEndpoints
             deposit.NumeroTarjeta = numeroTarjeta;
         }
     }
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonCamel =
+        new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
+
+    private static Dictionary<string, string?> SnapshotCamposEditables(Deposito d) => new()
+    {
+        ["anexo"] = d.Anexo,
+        ["numeroOperacion"] = d.NumeroOperacion,
+        ["empresaId"] = d.EmpresaId?.ToString(),
+        ["bancoId"] = d.BancoId?.ToString(),
+        ["monto"] = d.Monto.ToString("0.00", CultureInfo.InvariantCulture),
+        ["moneda"] = d.Moneda,
+        ["fechaDeposito"] = d.FechaDeposito?.ToString("yyyy-MM-dd"),
+        ["cliente"] = d.Cliente,
+        ["numeroTarjeta"] = d.NumeroTarjeta
+    };
 }
 
 public record BatchDepositsRequest(List<DepositCreateRequest> Items);

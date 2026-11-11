@@ -383,6 +383,10 @@ public static class MasterEndpoints
             var profileExists = await context.Profiles.AnyAsync(p => p.Id == request.ProfileId);
             if (!profileExists) return Results.BadRequest(new { error = "Profile no encontrado" });
 
+            var otroActivo = await BuscarOtroTrabajadorActivo(context, request.ProfileId, null);
+            if (otroActivo != null)
+                return Results.Conflict(new { error = $"Ese usuario ya está asignado al trabajador activo \"{otroActivo}\". Dale de baja o cámbiale el usuario primero." });
+
             var userId = GetUserId(http);
 
             var trabajador = new Trabajador
@@ -415,13 +419,40 @@ public static class MasterEndpoints
             var t = await context.Trabajadores.FirstOrDefaultAsync(x => x.Id == id);
             if (t == null) return Results.NotFound();
 
+            var nuevoProfileId = request.ProfileId ?? t.ProfileId;
+            var cambiaProfile = nuevoProfileId != t.ProfileId;
+
+            if (cambiaProfile)
+            {
+                var profile = await context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == nuevoProfileId);
+                if (profile == null)
+                    return Results.BadRequest(new { error = "Usuario no encontrado." });
+                
+                if (!profile.Activo)
+                    return Results.BadRequest(new { error = "El usuario seleccionado está inactivo." });
+
+                if (profile.EmpresaId != t.EmpresaId)
+                    return Results.BadRequest(new { error = "El usuario pertenece a otra empresa." });
+            }
+
+            if (request.Activo && (cambiaProfile || !t.Activo))
+            {
+                var otroActivo = await BuscarOtroTrabajadorActivo(context, nuevoProfileId, t.Id);
+                if (otroActivo != null)
+                    return Results.Conflict(new { error = $"Ese usuario ya está asignado al trabajador activo \"{otroActivo}\". Dale de baja o cámbiale el usuario primero." });
+            }
+
             t.Nombre = request.Nombre;
             t.TelefonoPersonal = request.TelefonoPersonal;
             t.SucursalId = request.SucursalId;
+            t.ProfileId = nuevoProfileId;
 
             // Si se desactiva, registrar fecha de fin
             if (!request.Activo && t.Activo)
                 t.FechaFin = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            if (request.Activo && !t.Activo)
+                t.FechaFin = null;
 
             t.Activo = request.Activo;
             await context.SaveChangesAsync();
@@ -606,6 +637,13 @@ public static class MasterEndpoints
     private static bool IsAdmin(HttpContext http) => http.User.FindFirst(ClaimTypes.Role)?.Value is "admin";
     private static Guid GetUserId(HttpContext http)
         => Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+    private static Task<string?> BuscarOtroTrabajadorActivo(AppDbContext context, Guid profileId, Guid? excluirTrabajadorId) =>
+        context.Trabajadores.AsNoTracking()
+            .Where(t => t.ProfileId == profileId && t.Activo
+                && (excluirTrabajadorId == null || t.Id != excluirTrabajadorId))
+            .Select(t => t.Nombre)
+            .FirstOrDefaultAsync();
 
     private static bool IsAdminOrFinanzas(HttpContext http) => http.User.FindFirst(ClaimTypes.Role)?.Value is "admin" or "finanzas";
 }

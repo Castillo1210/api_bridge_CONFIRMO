@@ -446,6 +446,57 @@ namespace Confirmo.Api.Migrations
                     b.ToTable("depositos", "public");
                 });
 
+            modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoCorreccion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Cambios")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("DepositoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EstadoAnterior")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("EstadoNuevo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileId");
+
+                    b.HasIndex("DepositoId", "CreatedAt");
+
+                    b.ToTable("deposito_correcciones", "public");
+                });
+
             modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoRechazoHistorial", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1052,6 +1103,24 @@ namespace Confirmo.Api.Migrations
                     b.Navigation("Validador");
 
                     b.Navigation("Vendedor");
+                });
+
+            modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoCorreccion", b =>
+                {
+                    b.HasOne("Confirmo.Api.Models.Entities.Deposito", "Deposito")
+                        .WithMany()
+                        .HasForeignKey("DepositoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Confirmo.Api.Models.Entities.Profile", "Profile")
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Deposito");
+
+                    b.Navigation("Profile");
                 });
 
             modelBuilder.Entity("Confirmo.Api.Models.Entities.DepositoRechazoHistorial", b =>
