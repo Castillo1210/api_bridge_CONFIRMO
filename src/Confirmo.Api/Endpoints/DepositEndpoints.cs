@@ -520,6 +520,7 @@ public static class DepositEndpoints
             var oldStatus = deposit.Estado;
             deposit.Estado = DepositStates.Confirmado;
             deposit.FechaValidacion = DateTimeOffset.UtcNow;
+            var numeroOperacionVoucher = deposit.NumeroOperacion;
             ApplyEditableDepositFields(deposit, request?.Anexo, request?.NumeroOperacion, request?.EmpresaId, request?.BancoId, request?.Monto, request?.Moneda, request?.FechaDeposito, request?.Cliente, request?.RucCliente, request?.ReferenciaCliente, request?.NumeroTarjeta);
 
             var bancoCodigo = await context.Bancos.AsNoTracking()
@@ -537,7 +538,7 @@ public static class DepositEndpoints
                 deposit.Observaciones = request.Observaciones;
 
             BitacoraDeposito.Registrar(context, deposit.Id, userId, "confirmado",
-                new { monto = deposit.Monto, moneda = deposit.Moneda, bancoId = deposit.BancoId });
+                new { monto = deposit.Monto, moneda = deposit.Moneda, bancoId = deposit.BancoId, numeroOperacionVoucher });
 
             await context.SaveChangesAsync();
 
