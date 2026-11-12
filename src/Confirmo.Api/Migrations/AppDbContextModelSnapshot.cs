@@ -709,6 +709,41 @@ namespace Confirmo.Api.Migrations
                     b.ToTable("envio_aviso_logs", "public");
                 });
 
+            modelBuilder.Entity("Confirmo.Api.Models.Entities.MotivoRechazo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Orden");
+
+                    b.ToTable("motivos_rechazo", "public");
+                });
+
             modelBuilder.Entity("Confirmo.Api.Models.Entities.PlantillaMensajeSistema", b =>
                 {
                     b.Property<Guid>("Id")

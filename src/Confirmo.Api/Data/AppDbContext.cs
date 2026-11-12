@@ -27,6 +27,7 @@ public class AppDbContext : DbContext
     public DbSet<DepositoRechazoHistorial> DepositoRechazosHistorial => Set<DepositoRechazoHistorial>();
     public DbSet<DepositoCorreccion> DepositoCorrecciones => Set<DepositoCorreccion>();
     public DbSet<DepositoEvento> DepositoEventos => Set<DepositoEvento>();
+    public DbSet<MotivoRechazo> MotivosRechazo => Set<MotivoRechazo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

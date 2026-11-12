@@ -649,6 +649,24 @@ public static class DepositEndpoints
 
             await chat.AddSystemMessageAsync(deposit.Id, mensajeChat);
 
+            // ¿Cuántas veces se rechazó este depósito? (incluye el actual)
+            var porHistorial = await context.DepositoRechazosHistorial.CountAsync(r => r.DepositoId == deposit.Id) + 1;
+            var porBitacora = await context.DepositoEventos.CountAsync(e => e.DepositoId == deposit.Id && e.Evento == "rechazado");
+            var vecesRechazado = Math.Max(porHistorial, porBitacora);
+
+            string? pushTitulo = null;
+            if (vecesRechazado >= 2)
+            {
+                placeholders["veces"] = vecesRechazado.ToString();
+                placeholders["operador"] = user.FullName;
+                var avisoChat = await chat.RenderPlantillaAsync("deposito_rechazo_reiterado", "chat", placeholders);
+                await chat.AddSystemMessageAsync(deposit.Id, avisoChat);
+
+                // EL push lleva el aviso (más útil repetir solo el motivo).
+                mensajePush = await chat.RenderPlantillaAsync("deposito_rechazo_reiterado", "push", placeholders);
+                pushTitulo = "⚠️ Depósito rechazado otra vez";
+            }
+
             await notifications.NotifyDepositRejected(deposit.VendedorId, deposit.Id, deposit.Observaciones);
             await notifications.NotifyPanelDepositStatusChanged(deposit.Id, DepositStates.Rechazado, oldStatus);
 

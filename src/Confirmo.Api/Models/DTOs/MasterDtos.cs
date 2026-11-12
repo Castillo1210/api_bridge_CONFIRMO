@@ -114,3 +114,6 @@ public record UpdateProfileRequest(
 public record ResetProfilePasswordRequest(
     string NewPassword
 );
+
+public record MotivoRechazoRequest(string Texto, int? Orden, bool? Activo);
+public record MotivoRechazoResponse(Guid Id, string Texto, int Orden, bool Activo);

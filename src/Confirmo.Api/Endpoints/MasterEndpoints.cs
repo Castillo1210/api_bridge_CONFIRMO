@@ -504,6 +504,101 @@ public static class MasterEndpoints
             return Results.Ok(new [] { Map(a), Map(b)});
         });
 
+        // ================================================
+        // MOTIVOS DE RECHAZO (chips del modal "Rechazar")
+        // ================================================
+
+        static MotivoRechazoResponse MapMotivo(MotivoRechazo m) => new(m.Id, m.Texto, m.Orden, m.Activo);
+
+        group.MapGet("/motivos-rechazo", async (
+            AppDbContext context,
+            HttpContext http,
+            [FromQuery] bool? incluirInactivos
+        ) =>
+        {
+            if (!IsAdminOrFinanzas(http)) return Results.Forbid();
+
+            var query = context.MotivosRechazo.AsNoTracking();
+            if (!(incluirInactivos == true && IsAdmin(http)))
+                query = query.Where(m => m.Activo);
+
+            var items = await query.OrderBy(m => m.Orden).ThenBy(m => m.Texto).ToListAsync();
+            return Results.Ok(items.Select(MapMotivo));
+        });
+
+        group.MapPost("/motivos-rechazo", async (
+            MotivoRechazoRequest request,
+            AppDbContext context,
+            HttpContext http
+        ) =>
+        {
+            if (!IsAdmin(http)) return Results.Forbid();
+
+            var texto = request.Texto?.Trim() ?? "";
+            if (texto.Length == 0 || texto.Length > 150)
+                return Results.BadRequest(new { error = "El motivo debe tener entre 1 a 150 caracteres." });
+
+            if (await context.MotivosRechazo.AnyAsync(m => m.Texto.ToLower() == texto.ToLower()))
+                return Results.BadRequest(new { error = "Ese motivo ya existe." });
+
+            var orden = request.Orden ?? ((await context.MotivosRechazo.MaxAsync(m => (int?)m.Orden)) ?? 0) + 1;
+            var motivo = new MotivoRechazo
+            {
+                Texto = texto,
+                Orden = orden,
+                Activo = request.Activo ?? true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+
+            context.MotivosRechazo.Add(motivo);
+            await context.SaveChangesAsync();
+            return Results.Created($"/api/v1/masters/motivos-rechazo/{motivo.Id}", MapMotivo(motivo));
+        });
+
+        group.MapPut("/motivos-rechazo/{id:guid}", async (
+            Guid id,
+            MotivoRechazoRequest request,
+            AppDbContext context,
+            HttpContext http
+        ) =>
+        {
+            if (!IsAdmin(http)) return Results.Forbid();
+
+            var motivo = await context.MotivosRechazo.FirstOrDefaultAsync(m => m.Id == id);
+            if (motivo == null) return Results.NotFound();
+
+            var texto = request.Texto?.Trim() ?? "";
+            if (texto.Length == 0 || texto.Length > 150)
+                return Results.BadRequest(new { error = "El motivo debe tener entre 1 a 150 caracteres" });
+
+            if (await context.MotivosRechazo.AnyAsync(m => m.Id != id && m.Texto.ToLower() == texto.ToLower()))
+                return Results.Conflict(new { error = "Ese motivo ya existe." });
+
+            motivo.Texto = texto;
+            if (request.Orden.HasValue) motivo.Orden = request.Orden.Value;
+            if (request.Activo.HasValue) motivo.Activo = request.Activo.Value;
+            motivo.UpdatedAt = DateTimeOffset.UtcNow;
+            await context.SaveChangesAsync();
+            return Results.Ok(MapMotivo(motivo));
+        });
+
+        group.MapDelete("/motivos-rechazo/{id:guid}", async (
+            Guid id,
+            AppDbContext context,
+            HttpContext http
+        ) =>
+        {
+            if (!IsAdmin(http)) return Results.Forbid();
+
+            var motivo = await context.MotivosRechazo.FirstOrDefaultAsync(m => m.Id == id);
+            if (motivo == null) return Results.NotFound();
+
+            context.MotivosRechazo.Remove(motivo);
+            await context.SaveChangesAsync();
+            return Results.Ok(new { deleted = true, id });
+        });
+
         // ═══════════════════════════════════════════
         // PROFILES
         // ═══════════════════════════════════════════
