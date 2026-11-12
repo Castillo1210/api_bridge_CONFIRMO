@@ -75,6 +75,8 @@ public record UpdateTrabajadorRequest(
     Guid? ProfileId = null
 );
 
+public record IntercambiarUsuarioRequest(Guid OtroTrabajadorId, bool IntercambiarTelefono = false);
+
 // Profiles
 public record ProfileResponse(
     Guid Id,

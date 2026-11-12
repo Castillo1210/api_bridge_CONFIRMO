@@ -475,6 +475,35 @@ public static class MasterEndpoints
             return Results.Ok(new { deleted = true, id });
         });
 
+        group.MapPost("/trabajadores/{id:guid}/intercambiar-usuario", async (
+            Guid id,
+            IntercambiarUsuarioRequest request,
+            AppDbContext context,
+            HttpContext http
+        ) =>
+        {
+            if (!IsAdmin(http)) return Results.Forbid();
+            if (request.OtroTrabajadorId == id)
+                return Results.BadRequest(new { error = "Elige otro trabajador para intercambiar." });
+
+            var a = await context.Trabajadores.FirstOrDefaultAsync(t => t.Id == id);
+            var b = await context.Trabajadores.FirstOrDefaultAsync(t => t.Id == request.OtroTrabajadorId);
+            if (a == null || b == null) return Results.NotFound(new { error = "Trabajador no encontrado." });
+            if (a.EmpresaId != b.EmpresaId)
+                return Results.BadRequest(new { error = "Solo se puede intercambiar entre trabajadores de la misma empresa." });
+
+            (a.ProfileId, b.ProfileId) = (b.ProfileId, a.ProfileId);
+            if (request.IntercambiarTelefono)
+                (a.TelefonoPersonal, b.TelefonoPersonal) = (b.TelefonoPersonal, a.TelefonoPersonal);
+
+            await context.SaveChangesAsync();
+
+            static TrabajadorResponse Map(Trabajador t) => new TrabajadorResponse(t.Id, t.ProfileId, t.Nombre, t.TelefonoPersonal,
+                t.EmpresaId, t.SucursalId, t.Activo, t.FechaInicio, t.FechaFin);
+
+            return Results.Ok(new [] { Map(a), Map(b)});
+        });
+
         // ═══════════════════════════════════════════
         // PROFILES
         // ═══════════════════════════════════════════
